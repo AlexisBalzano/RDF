@@ -129,12 +129,6 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 		}
 		// match config
 		std::smatch match;
-		std::regex rxDraw(R"(^DRAW (ON|OFF)$)", std::regex_constants::icase);
-		if (std::regex_match(cmd, match, rxDraw)) {
-			bool mode = match[1].str() == "ON";
-			SaveDrawSetting(SETTING_ENABLE_DRAW, "Enable RDF draw", std::to_string(mode), asr);
-			return true;
-		}
 		std::regex rxRGB(R"(^(RGB|CTRGB) (\S+)$)", std::regex_constants::icase);
 		if (std::regex_match(cmd, match, rxRGB)) {
 			auto bufferMode = match[1].str();
@@ -152,6 +146,11 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 			}
 		}
 		// no need for regex
+		int bufferDraw;
+		if (sscanf_s(cmd.c_str(), "DRAW %d", &bufferDraw) == 1) {
+			SaveDrawSetting(SETTING_ENABLE_DRAW, "Enable RDF draw", std::to_string(bufferDraw), asr);
+			return true;
+		}
 		int bufferRadius;
 		if (sscanf_s(cmd.c_str(), "RADIUS %d", &bufferRadius) == 1) {
 			if (bufferRadius > 0) {
