@@ -25,6 +25,20 @@ auto RDFCommon::GetRGB(COLORREF& color, const std::string& settingValue) -> bool
 	return false;
 }
 
+auto RDFCommon::GetSettingOnOff(bool& on, const std::string& settingValue) -> bool
+{
+	// settingValue is uppercase
+	if (settingValue == "ON" || settingValue == "1") {
+		on = true;
+		return true;
+	}
+	else if (settingValue == "OFF" || settingValue == "0") {
+		on = false;
+		return true;
+	}
+	return false;
+}
+
 auto RDFCommon::AddOffset(EuroScopePlugIn::CPosition& position, const double& heading, const double& distance) -> void
 {
 	// from ES internal void CEuroScopeCoord :: Move ( double heading, double distance )

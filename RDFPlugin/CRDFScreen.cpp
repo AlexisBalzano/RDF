@@ -127,7 +127,14 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 		else {
 			return false;
 		}
-		// match config
+		if (cmd.starts_with("DRAW ")) {
+			bool opt;
+			if (RDFCommon::GetSettingOnOff(opt, cmd.substr(5))) {
+				SaveDrawSetting(SETTING_ENABLE_DRAW, "Enable RDF draw", opt ? "1" : "0", asr);
+				return true;
+			}
+		}
+		// colors
 		std::smatch match;
 		std::regex rxRGB(R"(^(RGB|CTRGB) (\S+)$)", std::regex_constants::icase);
 		if (std::regex_match(cmd, match, rxRGB)) {
@@ -146,11 +153,6 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 			}
 		}
 		// no need for regex
-		int bufferDraw;
-		if (sscanf_s(cmd.c_str(), "DRAW %d", &bufferDraw) == 1) {
-			SaveDrawSetting(SETTING_ENABLE_DRAW, "Enable RDF draw", std::to_string(bufferDraw), asr);
-			return true;
-		}
 		int bufferRadius;
 		if (sscanf_s(cmd.c_str(), "RADIUS %d", &bufferRadius) == 1) {
 			if (bufferRadius > 0) {
@@ -191,10 +193,12 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 				return true;
 			}
 		}
-		int bufferCtrl;
-		if (sscanf_s(cmd.c_str(), "CONTROLLER %d", &bufferCtrl) == 1) {
-			SaveDrawSetting(SETTING_DRAW_CONTROLLERS, "Draw controllers", std::to_string(bufferCtrl), asr);
-			return true;
+		if (cmd.starts_with("CONTROLLER ")) {
+			bool opt;
+			if (RDFCommon::GetSettingOnOff(opt, cmd.substr(11))) {
+				SaveDrawSetting(SETTING_DRAW_CONTROLLERS, "Draw controllers", opt ? "1" : "0", asr);
+				return true;
+			}
 		}
 	}
 	catch (std::exception const& e)

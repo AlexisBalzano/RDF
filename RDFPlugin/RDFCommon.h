@@ -51,6 +51,7 @@ namespace RDFCommon {
 
 	// General functions
 	auto GetRGB(COLORREF& color, const std::string& settingValue) -> bool; // return true if success
+	auto GetSettingOnOff(bool& on, const std::string& settingValue) -> bool; // return true if success
 	auto AddOffset(EuroScopePlugIn::CPosition& position, const double& heading, const double& distance) -> void;
 
 	// Draw position

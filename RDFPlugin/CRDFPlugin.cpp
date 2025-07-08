@@ -706,19 +706,20 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 
 		// bridge on/off
 		if (cmd.starts_with(COMMAND_BRIDGE)) {
-			auto mode = cmd.substr(COMMAND_BRIDGE.size());
-			if (mode == "ON") {
-				SaveDataToSettings(SETTING_ENABLE_BRIDGE, "Enable bridge", "1");
-				std::string logMsg = "Bridge is enabled! Use .RDF REFRESH command to manually sync with TrackAudio.";
-				PLOGI << logMsg;
-				DisplayMessageSilent(logMsg);
-				return true;
-			}
-			else if (mode == "OFF") {
-				SaveDataToSettings(SETTING_ENABLE_BRIDGE, "Enable bridge", "0");
-				std::string logMsg = "Bridge is disable! Future station updates won't sync with channels.";
-				PLOGI << logMsg;
-				DisplayMessageSilent(logMsg);
+			bool opt;
+			if (RDFCommon::GetSettingOnOff(opt, cmd.substr(COMMAND_BRIDGE.size()))) {
+				if (opt) {
+					SaveDataToSettings(SETTING_ENABLE_BRIDGE, "Enable bridge", "1");
+					std::string logMsg = "Bridge is enabled! Use .RDF REFRESH command to manually sync with TrackAudio.";
+					PLOGI << logMsg;
+					DisplayMessageSilent(logMsg);
+				}
+				else {
+					SaveDataToSettings(SETTING_ENABLE_BRIDGE, "Enable bridge", "0");
+					std::string logMsg = "Bridge is disable! Future station updates won't sync with channels.";
+					PLOGI << logMsg;
+					DisplayMessageSilent(logMsg);
+				}
 				return true;
 			}
 			else {
