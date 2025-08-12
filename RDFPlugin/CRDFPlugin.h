@@ -18,10 +18,12 @@ private:
 	std::shared_mutex mtxDrawSettings;
 	std::shared_ptr<RDFCommon::draw_settings> currentDrawSettings;
 
-	// drawing records
+	// drawing records and transmitting frequency records
 	std::shared_mutex mtxTransmission;
 	RDFCommon::callsign_position curTransmission;
 	RDFCommon::callsign_position preTransmission;
+	std::shared_mutex mtxFrequency;
+	RDFCommon::callsign_frequency curFrequencies;
 
 	// TrackAudio WebSocket
 	std::string addressTrackAudio;
@@ -63,6 +65,7 @@ private:
 	// functional things 
 	auto GetBridgeMode(void) -> bool;
 	auto GenerateDrawPosition(std::string callsign) -> RDFCommon::draw_position;
+	auto IsFrequencyTx(int pFrequencyHz) -> bool;
 	auto TrackAudioTransmissionHandler(const nlohmann::json& data, const bool& rxEnd) -> void;
 	auto TrackAudioStationStatesHandler(const nlohmann::json& data) -> void;
 	auto TrackAudioStationStateUpdateHandler(const nlohmann::json& data) -> void;

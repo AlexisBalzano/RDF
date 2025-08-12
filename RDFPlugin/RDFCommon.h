@@ -31,6 +31,7 @@ constexpr auto SETTING_HIGH_ALTITUDE = "HighAltitude";
 constexpr auto SETTING_LOW_PRECISION = "LowPrecision";
 constexpr auto SETTING_HIGH_PRECISION = "HighPrecision";
 constexpr auto SETTING_DRAW_CONTROLLERS = "DrawControllers";
+constexpr auto SETTING_DRAW_ONLY_IF_STATION_IS_TX = "DrawOnlyIfStationIsTx";
 // Tag item type
 constexpr auto TAG_ITEM_TYPE_RDF_STATE = 1001; // RDF state
 
@@ -84,6 +85,7 @@ namespace RDFCommon {
 		int lowPrecision;
 		int highPrecision;
 		bool drawController;
+		bool drawOnlyIfStationIsTx;
 
 		_draw_settings(void) {
 			enabled = true;
@@ -97,6 +99,7 @@ namespace RDFCommon {
 			highAltitude = 0; // Default: 0 (feet)
 			highPrecision = 0; // Default: 0 (nautical miles), range: [0, +inf)
 			drawController = false;
+			drawOnlyIfStationIsTx = false;
 		}
 	} draw_settings;
 
@@ -129,7 +132,7 @@ namespace RDFCommon {
 			tx = channel.GetIsTextTransmitOn();
 		}
 	} chnl_state;
-
+	typedef std::map<std::string, chnl_state> callsign_frequency;
 }
 
 #endif // !RDFCOMMON_H

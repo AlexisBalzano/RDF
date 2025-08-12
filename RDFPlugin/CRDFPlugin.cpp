@@ -345,6 +345,12 @@ auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> 
 			currentDrawSettings->drawController = (bool)std::stoi(cstrController);
 			PLOGV << SETTING_DRAW_CONTROLLERS << ": " << currentDrawSettings->drawController;
 		}
+		auto drawOnlyIfStationIsTx = GetSetting(SETTING_DRAW_ONLY_IF_STATION_IS_TX);
+		if (drawOnlyIfStationIsTx.size())
+		{
+			currentDrawSettings->drawOnlyIfStationIsTx = (bool)std::stoi(drawOnlyIfStationIsTx);
+			PLOGV << SETTING_DRAW_ONLY_IF_STATION_IS_TX << ": " << currentDrawSettings->drawOnlyIfStationIsTx;
+		}
 		PLOGD << "drawing settings loaded";
 	}
 	catch (std::exception const& e)
@@ -456,6 +462,7 @@ auto CRDFPlugin::TrackAudioTransmissionHandler(const nlohmann::json& data, const
 	// pass rxEnd = true for "kRxEnd"
 	std::unique_lock tlock(mtxTransmission);
 	std::string callsign = data.at("callsign");
+    int pFrequencyHz = data.at("pFrequencyHz");
 	auto it = curTransmission.find(callsign);
 	if (it != curTransmission.end()) {
 		if (rxEnd) {
@@ -463,14 +470,28 @@ auto CRDFPlugin::TrackAudioTransmissionHandler(const nlohmann::json& data, const
 		}
 	}
 	else if (!rxEnd) {
-		auto dp = GenerateDrawPosition(callsign);
-		if (dp.radius > 0) {
-			curTransmission[callsign] = dp;
+		if (!currentDrawSettings->drawOnlyIfStationIsTx ||
+			ControllerMyself().GetFacility() == 0 ||
+			IsFrequencyTx(pFrequencyHz)) {
+			auto dp = GenerateDrawPosition(callsign);
+			if (dp.radius > 0) {
+				curTransmission[callsign] = dp;
+			}
 		}
 	}
 	if (curTransmission.size()) {
 		preTransmission = curTransmission;
 	}
+}
+
+auto CRDFPlugin::IsFrequencyTx(int pFrequencyHz) -> bool {
+	for (auto it = curFrequencies.begin(); it != curFrequencies.end(); ++it) {
+		if (FrequencyIsSame(it->second.frequency, FrequencyFromHz(pFrequencyHz)))
+		{
+			return it->second.tx;
+		}
+	}
+	return false;
 }
 
 auto CRDFPlugin::TrackAudioStationStatesHandler(const nlohmann::json& data) -> void
@@ -584,12 +605,22 @@ auto CRDFPlugin::UpdateChannel(const std::optional<std::string>& callsign, const
 		if (chnl.IsValid()) {
 			ToggleChannel(chnl, channelState->rx, channelState->tx);
 		}
+		std::unique_lock flock(mtxFrequency);
+		if (callsign.has_value() && channelState.has_value() && (channelState->rx || channelState->tx)) {
+			curFrequencies[callsign.value()] = channelState.value();
+		} else {
+			curFrequencies.erase(callsign.value_or("NULL"));
+		}
+		flock.unlock();
 	}
 	else { // doesn't specify channel or frequency, deactivate all channels
 		PLOGD << "deactivating all";
 		for (auto chnl = GroundToArChannelSelectFirst(); chnl.IsValid(); chnl = GroundToArChannelSelectNext(chnl)) {
 			ToggleChannel(chnl, false, false); // check for prim/atis will be done inside
 		}
+		std::unique_lock flock(mtxFrequency);
+		curFrequencies.clear();
+		flock.unlock();
 	}
 }
 

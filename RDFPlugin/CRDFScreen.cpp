@@ -197,6 +197,11 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 			SaveDrawSetting(SETTING_DRAW_CONTROLLERS, "Draw controllers", std::to_string(bufferCtrl), asr);
 			return true;
 		}
+		int bufferDrawOnlyIfStationIsTx;
+		if (sscanf_s(cmd.c_str(), "ONLY_IF_STATION_IS_TX %d", &bufferDrawOnlyIfStationIsTx) == 1) {
+			SaveDrawSetting(SETTING_DRAW_ONLY_IF_STATION_IS_TX, "Draw only if station is TX", std::to_string(bufferDrawOnlyIfStationIsTx).c_str(), asr);
+			return true;
+		}
 	}
 	catch (std::exception const& e)
 	{
