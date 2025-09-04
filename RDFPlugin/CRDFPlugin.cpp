@@ -345,11 +345,11 @@ auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> 
 			currentDrawSettings->drawController = (bool)std::stoi(cstrController);
 			PLOGV << SETTING_DRAW_CONTROLLERS << ": " << currentDrawSettings->drawController;
 		}
-		auto drawOnlyIfStationIsTx = GetSetting(SETTING_DRAW_ONLY_IF_STATION_IS_TX);
-		if (drawOnlyIfStationIsTx.size())
+		auto cstrDrawRequireTx = GetSetting(SETTING_DRAW_REQUIRE_TX);
+		if (cstrDrawRequireTx.size())
 		{
-			currentDrawSettings->drawOnlyIfStationIsTx = (bool)std::stoi(drawOnlyIfStationIsTx);
-			PLOGV << SETTING_DRAW_ONLY_IF_STATION_IS_TX << ": " << currentDrawSettings->drawOnlyIfStationIsTx;
+			currentDrawSettings->drawRequireTx = (bool)std::stoi(cstrDrawRequireTx);
+			PLOGV << SETTING_DRAW_REQUIRE_TX << ": " << currentDrawSettings->drawRequireTx;
 		}
 		PLOGD << "drawing settings loaded";
 	}
@@ -470,7 +470,7 @@ auto CRDFPlugin::TrackAudioTransmissionHandler(const nlohmann::json& data, const
 		}
 	}
 	else if (!rxEnd) {
-		if (!currentDrawSettings->drawOnlyIfStationIsTx ||
+		if (!currentDrawSettings->drawRequireTx ||
 			ControllerMyself().GetFacility() == 0 ||
 			IsFrequencyTx(pFrequencyHz)) {
 			auto dp = GenerateDrawPosition(callsign);
