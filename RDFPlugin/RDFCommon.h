@@ -103,12 +103,6 @@ namespace RDFCommon {
 		}
 	} draw_settings;
 
-	// Frequency & channel state
-	typedef struct _freq_state {
-		std::optional<std::string> callsign; // can be empty
-		bool tx = false;
-	} freq_state;
-
 	typedef struct _es_chnl_state {
 		bool isPrim;
 		bool isAtis;
@@ -132,7 +126,7 @@ namespace RDFCommon {
 			tx = channel.GetIsTextTransmitOn();
 		}
 	} chnl_state;
-	typedef std::map<std::string, chnl_state> callsign_frequency;
+
 }
 
 #endif // !RDFCOMMON_H

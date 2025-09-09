@@ -462,7 +462,7 @@ auto CRDFPlugin::TrackAudioTransmissionHandler(const nlohmann::json& data, const
 	// pass rxEnd = true for "kRxEnd"
 	std::unique_lock tlock(mtxTransmission);
 	std::string callsign = data.at("callsign");
-    int pFrequencyHz = data.at("pFrequencyHz");
+	int frequency = FrequencyFromHz(data.at("pFrequencyHz")); // convert to kHz
 	auto it = curTransmission.find(callsign);
 	if (it != curTransmission.end()) {
 		if (rxEnd) {
@@ -470,9 +470,10 @@ auto CRDFPlugin::TrackAudioTransmissionHandler(const nlohmann::json& data, const
 		}
 	}
 	else if (!rxEnd) {
-		if (!currentDrawSettings->drawRequireTx ||
-			ControllerMyself().GetFacility() == 0 ||
-			IsFrequencyTx(pFrequencyHz)) {
+		std::shared_lock flock(mtxTxFrequencies);
+		if (!ControllerMyself().IsController() || // logged in as OBS
+			!currentDrawSettings->drawRequireTx || // doesn't require tx
+			curTxFrequencies.contains(frequency)) {
 			auto dp = GenerateDrawPosition(callsign);
 			if (dp.radius > 0) {
 				curTransmission[callsign] = dp;
@@ -482,16 +483,6 @@ auto CRDFPlugin::TrackAudioTransmissionHandler(const nlohmann::json& data, const
 	if (curTransmission.size()) {
 		preTransmission = curTransmission;
 	}
-}
-
-auto CRDFPlugin::IsFrequencyTx(int pFrequencyHz) -> bool {
-	for (auto it = curFrequencies.begin(); it != curFrequencies.end(); ++it) {
-		if (FrequencyIsSame(it->second.frequency, FrequencyFromHz(pFrequencyHz)))
-		{
-			return it->second.tx;
-		}
-	}
-	return false;
 }
 
 auto CRDFPlugin::TrackAudioStationStatesHandler(const nlohmann::json& data) -> void
@@ -605,22 +596,23 @@ auto CRDFPlugin::UpdateChannel(const std::optional<std::string>& callsign, const
 		if (chnl.IsValid()) {
 			ToggleChannel(chnl, channelState->rx, channelState->tx);
 		}
-		std::unique_lock flock(mtxFrequency);
-		if (callsign.has_value() && channelState.has_value() && (channelState->rx || channelState->tx)) {
-			curFrequencies[callsign.value()] = channelState.value();
-		} else {
-			curFrequencies.erase(callsign.value_or("NULL"));
+		// update current transmitting frequency
+		std::unique_lock flock(mtxTxFrequencies);
+		if (channelState->tx) {
+			curTxFrequencies.insert(channelState->frequency);
 		}
-		flock.unlock();
+		else {
+			curTxFrequencies.erase(channelState->frequency);
+		}
 	}
 	else { // doesn't specify channel or frequency, deactivate all channels
 		PLOGD << "deactivating all";
 		for (auto chnl = GroundToArChannelSelectFirst(); chnl.IsValid(); chnl = GroundToArChannelSelectNext(chnl)) {
 			ToggleChannel(chnl, false, false); // check for prim/atis will be done inside
 		}
-		std::unique_lock flock(mtxFrequency);
-		curFrequencies.clear();
-		flock.unlock();
+		// update current transmitting frequency
+		std::unique_lock flock(mtxTxFrequencies);
+		curTxFrequencies.clear();
 	}
 }
 
