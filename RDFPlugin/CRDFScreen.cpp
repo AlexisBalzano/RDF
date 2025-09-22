@@ -209,10 +209,12 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 				return true;
 			}
 		}
-		int bufferDrawOnlyIfStationIsTx;
-		if (sscanf_s(cmd.c_str(), "ONLY_IF_STATION_IS_TX %d", &bufferDrawOnlyIfStationIsTx) == 1) {
-			SaveDrawSetting(SETTING_DRAW_REQUIRE_TX, "Drawings require TX", std::to_string(bufferDrawOnlyIfStationIsTx).c_str(), asr);
-			return true;
+		if (cmd.starts_with("TX ")) {
+			bool opt;
+			if (RDFCommon::GetSettingOnOff(opt, cmd.substr(3))) {
+				SaveDrawSetting(SETTING_DRAW_REQUIRE_TX, "Drawing requires TX", opt ? "1" : "0", asr);
+				return true;
+			}
 		}
 	}
 	catch (std::exception const& e)
