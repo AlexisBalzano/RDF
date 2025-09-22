@@ -69,24 +69,26 @@ This table shows general configurable items that would affect the plugin globall
 
 This table shows all RDF drawing parameters. All entries allow per-ASR configuration.
 
-| Entry Name                | Command Line Keyword |    Range    | Default Value |
-| ------------------------- | -------------------: | :---------: | :-----------: |
-| EnableDraw                |               `DRAW` |   0 or 1    |       1       |
-| RGB                       |                `RGB` | RRR:GGG:BBB |  255:255:255  |
-| ConcurrentTransmissionRGB |              `CTRGB` | RRR:GGG:BBB |    255:0:0    |
-| Radius                    |             `RADIUS` |  (0, +inf)  |      20       |
-| Threshold                 |          `THRESHOLD` |             |      -1       |
-| Precision                 |          `PRECISION` |  [0, +inf)  |       0       |
-| LowAltitude               |    `ALTITUDE L_____` |             |       0       |
-| HighAltitude              |    `ALTITUDE H_____` |  [0, +inf)  |       0       |
-| LowPrecision              |   `PRECISION L_____` |             |       0       |
-| HighPrecision             |   `PRECISION H_____` |  [0, +inf)  |       0       |
-| DrawControllers           |         `CONTROLLER` |   0 or 1    |       0       |
+| Entry Name                |    Command Line Keyword |    Range    | Default Value |
+| ------------------------- |------------------------:| :---------: | :-----------: |
+| EnableDraw                |                  `DRAW` |   0 or 1    |       1       |
+| RGB                       |                   `RGB` | RRR:GGG:BBB |  255:255:255  |
+| ConcurrentTransmissionRGB |                 `CTRGB` | RRR:GGG:BBB |    255:0:0    |
+| Radius                    |                `RADIUS` |  (0, +inf)  |      20       |
+| Threshold                 |             `THRESHOLD` |             |      -1       |
+| Precision                 |             `PRECISION` |  [0, +inf)  |       0       |
+| LowAltitude               |       `ALTITUDE L_____` |             |       0       |
+| HighAltitude              |       `ALTITUDE H_____` |  [0, +inf)  |       0       |
+| LowPrecision              |      `PRECISION L_____` |             |       0       |
+| HighPrecision             |      `PRECISION H_____` |  [0, +inf)  |       0       |
+| DrawControllers           |            `CONTROLLER` |   0 or 1    |       0       |
+| DrawOnlyIfStationIsTx     | `ONLY_IF_STATION_IS_TX` |   0 or 1    |       0       |
 
 + **EnableDraw** controls RDF drawing functionality. 0 means OFF.
 + **RGB, ConcurrentTransmissionRGB** define drawing colors when single or multiple stations are transmitting at the same time.
 + **Radius, Threshold, Precision, LowAltitude, HighAltitude, LowPrecision, HighPrecision** see [Random Offset Schematic](#random-offset-schematic) below.
-+ **DrawControllers** controls whether transimitting controllers should be drawn as well. 0 means OFF.
++ **DrawControllers** controls whether transmitting controllers should be drawn as well. 0 means OFF.
++ **DrawOnlyIfStationIsTx** controls whether transmitting stations should only be drawn on active tx frequencies. 0 means OFF. (Not active in Observer Mode, Only compatible with TrackAudio)
 
 > [!NOTE]
 > When an ASR is opened, the plugin will use the configurations in the sequence of **ASR > plugin settings file > default value**.
@@ -141,6 +143,7 @@ RDF Plugin for Euroscope:HighAltitude:0
 RDF Plugin for Euroscope:LowPrecision:0
 RDF Plugin for Euroscope:HighPrecision:0
 RDF Plugin for Euroscope:DrawControllers:0
+RDF Plugin for Euroscope:DrawOnlyIfStationIsTx:0
 ```
 
 ```text
@@ -160,6 +163,7 @@ RDF Plugin for Euroscope:LowPrecision:2
 RDF Plugin for Euroscope:HighAltitude:41100
 RDF Plugin for Euroscope:HighPrecision:25
 RDF Plugin for Euroscope:DrawControllers:1
+RDF Plugin for Euroscope:DrawOnlyIfStationIsTx:1
 ```
 
 ### Samples - Per-ASR Drawing Parameters
@@ -182,6 +186,7 @@ PLUGIN:RDF Plugin for Euroscope:HighAltitude:0
 PLUGIN:RDF Plugin for Euroscope:LowPrecision:0
 PLUGIN:RDF Plugin for Euroscope:HighPrecision:0
 PLUGIN:RDF Plugin for Euroscope:DrawControllers:1
+PLUGIN:RDF Plugin for Euroscope:DrawOnlyIfStationIsTx:0
 ```
 
 ```text
@@ -193,6 +198,7 @@ PLUGIN:RDF Plugin for Euroscope:Precision:0
 PLUGIN:RDF Plugin for Euroscope:LowAltitude:0
 PLUGIN:RDF Plugin for Euroscope:LowPrecision:50
 PLUGIN:RDF Plugin for Euroscope:DrawControllers:1
+PLUGIN:RDF Plugin for Euroscope:DrawOnlyIfStationIsTx:0
 ```
 
 ## Known Issues

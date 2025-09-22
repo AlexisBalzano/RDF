@@ -345,6 +345,12 @@ auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> 
 			currentDrawSettings->drawController = (bool)std::stoi(cstrController);
 			PLOGV << SETTING_DRAW_CONTROLLERS << ": " << currentDrawSettings->drawController;
 		}
+		auto cstrDrawRequireTx = GetSetting(SETTING_DRAW_REQUIRE_TX);
+		if (cstrDrawRequireTx.size())
+		{
+			currentDrawSettings->drawRequireTx = (bool)std::stoi(cstrDrawRequireTx);
+			PLOGV << SETTING_DRAW_REQUIRE_TX << ": " << currentDrawSettings->drawRequireTx;
+		}
 		PLOGD << "drawing settings loaded";
 	}
 	catch (std::exception const& e)
@@ -456,6 +462,7 @@ auto CRDFPlugin::TrackAudioTransmissionHandler(const nlohmann::json& data, const
 	// pass rxEnd = true for "kRxEnd"
 	std::unique_lock tlock(mtxTransmission);
 	std::string callsign = data.at("callsign");
+	int frequency = FrequencyFromHz(data.at("pFrequencyHz")); // convert to kHz
 	auto it = curTransmission.find(callsign);
 	if (it != curTransmission.end()) {
 		if (rxEnd) {
@@ -463,9 +470,14 @@ auto CRDFPlugin::TrackAudioTransmissionHandler(const nlohmann::json& data, const
 		}
 	}
 	else if (!rxEnd) {
-		auto dp = GenerateDrawPosition(callsign);
-		if (dp.radius > 0) {
-			curTransmission[callsign] = dp;
+		std::shared_lock flock(mtxTxFrequencies);
+		if (!ControllerMyself().IsController() || // logged in as OBS
+			!currentDrawSettings->drawRequireTx || // doesn't require tx
+			curTxFrequencies.contains(frequency)) {
+			auto dp = GenerateDrawPosition(callsign);
+			if (dp.radius > 0) {
+				curTransmission[callsign] = dp;
+			}
 		}
 	}
 	if (curTransmission.size()) {
@@ -584,12 +596,23 @@ auto CRDFPlugin::UpdateChannel(const std::optional<std::string>& callsign, const
 		if (chnl.IsValid()) {
 			ToggleChannel(chnl, channelState->rx, channelState->tx);
 		}
+		// update current transmitting frequency
+		std::unique_lock flock(mtxTxFrequencies);
+		if (channelState->tx) {
+			curTxFrequencies.insert(channelState->frequency);
+		}
+		else {
+			curTxFrequencies.erase(channelState->frequency);
+		}
 	}
 	else { // doesn't specify channel or frequency, deactivate all channels
 		PLOGD << "deactivating all";
 		for (auto chnl = GroundToArChannelSelectFirst(); chnl.IsValid(); chnl = GroundToArChannelSelectNext(chnl)) {
 			ToggleChannel(chnl, false, false); // check for prim/atis will be done inside
 		}
+		// update current transmitting frequency
+		std::unique_lock flock(mtxTxFrequencies);
+		curTxFrequencies.clear();
 	}
 }
 

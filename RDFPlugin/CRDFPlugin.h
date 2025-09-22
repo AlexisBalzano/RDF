@@ -18,10 +18,12 @@ private:
 	std::shared_mutex mtxDrawSettings;
 	std::shared_ptr<RDFCommon::draw_settings> currentDrawSettings;
 
-	// drawing records
+	// drawing records and transmitting frequency records
 	std::shared_mutex mtxTransmission;
 	RDFCommon::callsign_position curTransmission;
 	RDFCommon::callsign_position preTransmission;
+	std::shared_mutex mtxTxFrequencies;
+	std::set<int> curTxFrequencies; // in kHz
 
 	// TrackAudio WebSocket
 	std::string addressTrackAudio;
