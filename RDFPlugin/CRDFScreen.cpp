@@ -136,13 +136,7 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 		else {
 			return false;
 		}
-		if (cmd.starts_with("DRAW ")) {
-			bool opt;
-			if (RDFCommon::GetSettingOnOff(opt, cmd.substr(5))) {
-				SaveDrawSetting(SETTING_ENABLE_DRAW, "Enable RDF draw", opt ? "1" : "0", asr);
-				return true;
-			}
-		}
+
 		// colors
 		std::smatch match;
 		std::regex rxRGB(R"(^(RGB|CTRGB) (\S+)$)", std::regex_constants::icase);
@@ -161,7 +155,7 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 				return true;
 			}
 		}
-		// no need for regex
+		// using sscanf_s for those with numbers
 		int bufferRadius;
 		if (sscanf_s(cmd.c_str(), "RADIUS %d", &bufferRadius) == 1) {
 			if (bufferRadius > 0) {
@@ -199,6 +193,14 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 		if (sscanf_s(cmd.c_str(), "PRECISION %d", &bufferPrecision) == 1) {
 			if (bufferPrecision >= 0) {
 				SaveDrawSetting(SETTING_PRECISION, "Precision", std::to_string(bufferPrecision), asr);
+				return true;
+			}
+		}
+		// on/off switches
+		if (cmd.starts_with("DRAW ")) {
+			bool opt;
+			if (RDFCommon::GetSettingOnOff(opt, cmd.substr(5))) {
+				SaveDrawSetting(SETTING_ENABLE_DRAW, "Enable RDF draw", opt ? "1" : "0", asr);
 				return true;
 			}
 		}
