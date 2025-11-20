@@ -17,6 +17,7 @@ private:
 	std::vector<std::shared_ptr<CRDFScreen>> vecScreen; // index is screen ID (incremental int)
 	std::shared_mutex mtxDrawSettings;
 	std::shared_ptr<RDFCommon::draw_settings> currentDrawSettings;
+	std::string currentDrawStyle;
 
 	// drawing records and transmitting frequency records
 	std::shared_mutex mtxTransmission;
@@ -61,6 +62,7 @@ private:
 	// settings related functions
 	auto LoadTrackAudioSettings(void) -> void;
 	auto LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> screenPtr) -> void;
+	auto LoadDrawingStyle(std::string styleName) -> bool;
 
 	// functional things 
 	auto GetBridgeMode(void) -> bool;

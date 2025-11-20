@@ -88,12 +88,9 @@ CRDFPlugin::CRDFPlugin()
 	socketTrackAudio.setMaxWaitBetweenReconnectionRetries(TRACKAUDIO_HEARTBEAT_SEC * 2000); // ms
 	socketTrackAudio.setPingInterval(TRACKAUDIO_HEARTBEAT_SEC);
 	socketTrackAudio.setOnMessageCallback(std::bind_front(&CRDFPlugin::TrackAudioMessageHandler, this));
-
-	std::unique_lock dlock(mtxDrawSettings);
-	currentDrawSettings = std::make_shared<RDFCommon::draw_settings>();
-	dlock.unlock();
-
 	LoadTrackAudioSettings();
+
+	// initialize default drawing settings
 	LoadDrawingSettings(std::nullopt);
 
 	auto logMsg = std::format("Version {} Loaded.", MY_PLUGIN_VERSION);
@@ -235,10 +232,11 @@ auto CRDFPlugin::LoadTrackAudioSettings(void) -> void
 	PLOGD << "TrackAudio WebSocket started";
 }
 
-auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> screenPtr) ->  void
+auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> screenPtr) -> void
 {
 	// pass nullopt to load plugin drawing settings, otherwise use ASR settings
-	// fallback logig: ASR -> plugin -> default
+	// fallback logic: style on -> default
+	//                 style off -> ASR -> plugin -> default
 	// Schematic: high altitude/precision optional. low altitude used for filtering regardless of others
 	// threshold < 0 will use circleRadius in pixel, circlePrecision for offset, low/high settings ignored
 	// lowPrecision > 0 and highPrecision > 0 and lowAltitude < highAltitude, will override circleRadius and circlePrecision with dynamic precision/radius
@@ -264,6 +262,11 @@ auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> 
 
 	try
 	{
+		// don't load drawing settings when using style
+		if (currentDrawStyle.size()) {
+			PLOGV << "using style: " << currentDrawStyle << ", bypass all other config";
+			return;
+		}
 		std::unique_lock<std::shared_mutex> lock(mtxDrawSettings);
 		// initialize settings
 		currentDrawSettings.reset(new RDFCommon::draw_settings());
@@ -365,6 +368,21 @@ auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> 
 	}
 }
 
+auto CRDFPlugin::LoadDrawingStyle(std::string styleName) -> bool
+{
+	// if any value is missing in style json, use values from plugin settings file
+	if (styleName.size()) {
+		PLOGD << "loading drawing style: " << styleName;
+		// [TODO]
+		return true;
+	}
+	// fallback to normal drawing settings
+	PLOGD << "no drawing style specified, fallback to plugin";
+	currentDrawStyle.clear();
+	LoadDrawingSettings(std::nullopt);
+	return false;
+}
+
 auto CRDFPlugin::GetBridgeMode(void) -> bool
 {
 	// true by default
@@ -416,33 +434,35 @@ auto CRDFPlugin::GenerateDrawPosition(std::string callsign) -> RDFCommon::draw_p
 		int highPrecision = currentDrawSettings->highPrecision;
 		bool drawController = currentDrawSettings->drawController;
 		dlock.unlock();
-		if (radarTarget.IsValid() && enableDraw) {
-			int alt = radarTarget.GetPosition().GetPressureAltitude();
-			if (alt >= lowAltitude) { // need to draw, see Schematic in LoadSettings
-				EuroScopePlugIn::CPosition pos = radarTarget.GetPosition().GetPosition();
-				double radius = circleRadius;
-				// determines offset
-				double offset = circlePrecision;
-				if (circleThreshold >= 0 && (lowPrecision > 0 || circlePrecision > 0)) {
-					if (highPrecision > 0 && highAltitude > lowAltitude) {
-						offset = (double)lowPrecision + (double)(alt - lowAltitude) * (double)(highPrecision - lowPrecision) / (double)(highAltitude - lowAltitude);
+		if (enableDraw) {
+			if (radarTarget.IsValid()) {
+				int alt = radarTarget.GetPosition().GetPressureAltitude();
+				if (alt >= lowAltitude) { // need to draw, see Schematic in LoadSettings
+					EuroScopePlugIn::CPosition pos = radarTarget.GetPosition().GetPosition();
+					double radius = circleRadius;
+					// determines offset
+					double offset = circlePrecision;
+					if (circleThreshold >= 0 && (lowPrecision > 0 || circlePrecision > 0)) {
+						if (highPrecision > 0 && highAltitude > lowAltitude) {
+							offset = (double)lowPrecision + (double)(alt - lowAltitude) * (double)(highPrecision - lowPrecision) / (double)(highAltitude - lowAltitude);
+						}
+						else {
+							offset = lowPrecision > 0 ? lowPrecision : circlePrecision;
+						}
+						radius = offset;
 					}
-					else {
-						offset = lowPrecision > 0 ? lowPrecision : circlePrecision;
+					if (offset > 0) { // add random offset
+						double distance = abs(disDistance(rdGenerator)) / 3.0 * offset;
+						double bearing = disBearing(rdGenerator);
+						RDFCommon::AddOffset(pos, bearing, distance);
 					}
-					radius = offset;
+					return RDFCommon::draw_position(pos, radius);
 				}
-				if (offset > 0) { // add random offset
-					double distance = abs(disDistance(rdGenerator)) / 3.0 * offset;
-					double bearing = disBearing(rdGenerator);
-					RDFCommon::AddOffset(pos, bearing, distance);
-				}
-				return RDFCommon::draw_position(pos, radius);
 			}
-		}
-		else if (drawController && controller.IsValid()) {
-			auto pos = controller.GetPosition();
-			return RDFCommon::draw_position(pos, circleRadius);
+			else if (drawController && controller.IsValid()) {
+				auto pos = controller.GetPosition();
+				return RDFCommon::draw_position(pos, circleRadius);
+			}
 		}
 	}
 	catch (std::exception const& e)
@@ -726,6 +746,9 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 		std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::toupper); // make upper
 		std::smatch match; // all regular expressions will ignore cases
 		static const std::string COMMAND_BRIDGE = ".RDF BRIDGE ";
+		static const std::string COMMAND_RELOAD = ".RDF RELOAD";
+		static const std::string COMMAND_REFRESH = ".RDF REFRESH";
+		static const std::string COMMAND_STYLE = ".RDF STYLE ";
 
 		// bridge on/off
 		if (cmd.starts_with(COMMAND_BRIDGE)) {
@@ -750,12 +773,12 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 			}
 		}
 		// reload
-		if (cmd == ".RDF RELOAD") {
+		if (cmd == COMMAND_RELOAD) {
 			LoadTrackAudioSettings();
 			return true;
 		}
 		// refresh
-		if (cmd == ".RDF REFRESH") {
+		if (cmd == COMMAND_REFRESH) {
 			PLOGD << "refreshing RDF records and station states";
 			std::unique_lock tlock(mtxTransmission);
 			curTransmission.clear();
@@ -768,10 +791,13 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 			PLOGD << "kGetStationStates is sent via WS";
 			return true;
 		}
+		// style
+		if (cmd.starts_with(COMMAND_STYLE)) {
+			return LoadDrawingStyle(cmd.substr(COMMAND_STYLE.size()));
+		}
 	}
 	catch (std::exception const& e)
 	{
-
 		PLOGE << "Error: " << e.what();
 		DisplayMessageUnread(std::string("Error: ") + e.what());
 	}
