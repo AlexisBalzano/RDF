@@ -13,6 +13,9 @@ class CRDFPlugin : public EuroScopePlugIn::CPlugIn, public std::enable_shared_fr
 private:
 	friend class CRDFScreen;
 
+	// directory
+	std::filesystem::path dllPath;
+
 	// screen controls and drawing params
 	std::vector<std::shared_ptr<CRDFScreen>> vecScreen; // index is screen ID (incremental int)
 	std::shared_mutex mtxDrawSettings;
@@ -44,7 +47,7 @@ private:
 	   NULL,
 	   NULL,
 	   NULL,
-	   "RDFHiddenWindowClass"
+	   TEXT("RDFHiddenWindowClass")
 	};
 	WNDCLASS windowClassAFV = {
 	   NULL,
@@ -56,7 +59,7 @@ private:
 	   NULL,
 	   NULL,
 	   NULL,
-	   "AfvBridgeHiddenWindowClass"
+	   TEXT("AfvBridgeHiddenWindowClass")
 	};
 
 	// settings related functions

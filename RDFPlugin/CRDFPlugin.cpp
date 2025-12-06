@@ -15,7 +15,7 @@ CRDFPlugin::CRDFPlugin()
 	HMODULE pluginModule = AfxGetInstanceHandle();
 	TCHAR pBuffer[MAX_PATH] = { 0 };
 	DWORD moduleNameRes = GetModuleFileName(pluginModule, pBuffer, sizeof(pBuffer) / sizeof(TCHAR) - 1);
-	std::filesystem::path dllPath = moduleNameRes != 0 ? pBuffer : "";
+	dllPath = moduleNameRes != 0 ? pBuffer : TEXT("");
 	auto logPath = dllPath.parent_path() / "RDFPlugin.log";
 	static plog::RollingFileAppender<plog::TxtFormatterUtcTime> rollingAppender(logPath.c_str()); // no rolling bahaviour
 #ifdef _DEBUG
@@ -40,8 +40,8 @@ CRDFPlugin::CRDFPlugin()
 	PLOGD << "creating AFV hidden windows";
 	RegisterClass(&windowClassRDF);
 	hiddenWindowRDF = CreateWindow(
-		"RDFHiddenWindowClass",
-		"RDFHiddenWindow",
+		TEXT("RDFHiddenWindowClass"),
+		TEXT("RDFHiddenWindow"),
 		NULL,
 		0,
 		0,
@@ -60,8 +60,8 @@ CRDFPlugin::CRDFPlugin()
 	// AFV bridge window
 	RegisterClass(&windowClassAFV);
 	hiddenWindowAFV = CreateWindow(
-		"AfvBridgeHiddenWindowClass",
-		"AfvBridgeHiddenWindow",
+		TEXT("AfvBridgeHiddenWindowClass"),
+		TEXT("AfvBridgeHiddenWindow"),
 		NULL,
 		0,
 		0,
@@ -111,11 +111,11 @@ CRDFPlugin::~CRDFPlugin()
 	if (hiddenWindowRDF != nullptr) {
 		DestroyWindow(hiddenWindowRDF);
 	}
-	UnregisterClass("RDFHiddenWindowClass", nullptr);
+	UnregisterClass(TEXT("RDFHiddenWindowClass"), nullptr);
 	if (hiddenWindowAFV != nullptr) {
 		DestroyWindow(hiddenWindowAFV);
 	}
-	UnregisterClass("AfvBridgeHiddenWindowClass", nullptr);
+	UnregisterClass(TEXT("AfvBridgeHiddenWindowClass"), nullptr);
 
 	PLOGI << "RDFPlugin is unloaded";
 }
@@ -371,16 +371,122 @@ auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> 
 auto CRDFPlugin::LoadDrawingStyle(std::string styleName) -> bool
 {
 	// if any value is missing in style json, use values from plugin settings file
-	if (styleName.size()) {
-		PLOGD << "loading drawing style: " << styleName;
-		// [TODO]
-		return true;
+	if (styleName.empty()) { // turn off style if name is not passed
+		PLOGI << "no drawing style specified, turning off style";
+		currentDrawStyle.clear();
+		return false;
 	}
-	// fallback to normal drawing settings
-	PLOGD << "no drawing style specified, fallback to plugin";
-	currentDrawStyle.clear();
-	LoadDrawingSettings(std::nullopt);
-	return false;
+	PLOGI << "loading drawing style '" << styleName << "'";
+
+	// read json file
+	std::filesystem::path stylePath = dllPath.parent_path() / "RDFStyle.json";
+	PLOGD << "opening style json file: " << stylePath.string();
+	std::ifstream styleFile(stylePath);
+	if (!styleFile.is_open()) {
+		PLOGW << "failed to open json file: " << stylePath.string();
+		currentDrawStyle.clear();
+		return false;
+	}
+
+	try {
+		// parse json file
+		nlohmann::json styleJson;
+		styleFile >> styleJson;
+		styleFile.close();
+
+		// find if top-level keys contains styleName
+		if (styleJson.contains(styleName)) {
+			auto& drawingStyleJson = styleJson.at(styleName);
+
+			// initialize settings
+			std::unique_lock<std::shared_mutex> lock(mtxDrawSettings);
+			currentDrawSettings.reset(new RDFCommon::draw_settings());
+			// load from json
+			for (auto& [key, val] : drawingStyleJson.items()) {
+				PLOGV << "style json: " << key << ": " << val.dump();
+				if (key == SETTING_RGB) {
+					RDFCommon::GetRGB(currentDrawSettings->rdfRGB, val);
+				}
+				else if (key == SETTING_CONCURRENT_RGB) {
+					RDFCommon::GetRGB(currentDrawSettings->rdfConcurRGB, val);
+				}
+				else if (key == SETTING_CIRCLE_RADIUS) {
+					if (val > 0) {
+						currentDrawSettings->circleRadius = val;
+						PLOGV << SETTING_CIRCLE_RADIUS << ": " << currentDrawSettings->circleRadius;
+					}
+				}
+				else if (key == SETTING_THRESHOLD) {
+					currentDrawSettings->circleThreshold = val;
+					PLOGV << SETTING_THRESHOLD << ": " << currentDrawSettings->circleThreshold;
+				}
+				else if (key == SETTING_PRECISION) {
+					if (val >= 0) {
+						currentDrawSettings->circlePrecision = val;
+						PLOGV << SETTING_PRECISION << ": " << currentDrawSettings->circlePrecision;
+					}
+				}
+				else if (key == SETTING_LOW_ALTITUDE) {
+					currentDrawSettings->lowAltitude = val;
+					PLOGV << SETTING_LOW_ALTITUDE << ": " << currentDrawSettings->lowAltitude;
+				}
+				else if (key == SETTING_HIGH_ALTITUDE) {
+					if (val > 0) {
+						currentDrawSettings->highAltitude = val;
+						PLOGV << SETTING_HIGH_ALTITUDE << ": " << currentDrawSettings->highAltitude;
+					}
+				}
+				else if (key == SETTING_LOW_PRECISION) {
+					currentDrawSettings->lowPrecision = val;
+					PLOGV << SETTING_LOW_PRECISION << ": " << currentDrawSettings->lowPrecision;
+				}
+				else if (key == SETTING_HIGH_PRECISION) {
+					if (val >= 0) {
+						currentDrawSettings->highPrecision = val;
+						PLOGV << SETTING_HIGH_PRECISION << ": " << currentDrawSettings->highPrecision;
+					}
+				}
+				else if (key == SETTING_DRAW_CONTROLLERS) {
+					currentDrawSettings->drawController = (bool)val;
+					PLOGV << SETTING_DRAW_CONTROLLERS << ": " << currentDrawSettings->drawController;
+				}
+				else if (key == SETTING_DRAW_REQUIRE_TX) {
+					currentDrawSettings->drawRequireTx = (bool)val;
+					PLOGV << SETTING_DRAW_REQUIRE_TX << ": " << currentDrawSettings->drawRequireTx;
+				}
+			}
+			// if everything goes smoothly, store the style name to prevent overwritten by LoadDrawingSettings
+			currentDrawStyle = styleName;
+			return true;
+		}
+		else {
+			PLOGW << "unable to find style " << styleName << " in: " << stylePath.string();
+			currentDrawStyle.clear();
+			return false;
+		}
+	}
+	catch (nlohmann::json::exception& e) {
+		PLOGE << "json parsing error: " << e.what();
+		currentDrawStyle.clear();
+		LoadDrawingSettings(std::nullopt);
+		DisplayMessageUnread(std::string("Error: ") + e.what());
+		return false;
+	}
+	catch (std::exception& e) {
+		PLOGE << "Error: " << e.what();
+		currentDrawStyle.clear();
+		LoadDrawingSettings(std::nullopt);
+		DisplayMessageUnread(std::string("Error: ") + e.what());
+		return false;
+	}
+	catch (...)
+	{
+		PLOGE << UNKNOWN_ERROR_MSG;
+		currentDrawStyle.clear();
+		LoadDrawingSettings(std::nullopt);
+		DisplayMessageUnread(UNKNOWN_ERROR_MSG);
+		return false;
+	}
 }
 
 auto CRDFPlugin::GetBridgeMode(void) -> bool
@@ -793,7 +899,8 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 		}
 		// style
 		if (cmd.starts_with(COMMAND_STYLE)) {
-			return LoadDrawingStyle(cmd.substr(COMMAND_STYLE.size()));
+			// use original command line to address upper/lower cases in style name
+			return LoadDrawingStyle(std::string(sCommandLine).substr(COMMAND_STYLE.size()));
 		}
 	}
 	catch (std::exception const& e)
