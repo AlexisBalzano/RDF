@@ -370,26 +370,24 @@ auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> 
 
 auto CRDFPlugin::LoadDrawingStyle(std::string styleName) -> bool
 {
-	// if any value is missing in style json, use values from plugin settings file
+	// only after everything goes smoothly should it update currentDrawStyle
 	if (styleName.empty()) { // turn off style if name is not passed
 		PLOGI << "no drawing style specified, turning off style";
 		currentDrawStyle.clear();
+		LoadDrawingSettings(std::nullopt);
 		return false;
 	}
 	PLOGI << "loading drawing style '" << styleName << "'";
 
-	// read json file
-	std::filesystem::path stylePath = dllPath.parent_path() / "RDFStyle.json";
-	PLOGD << "opening style json file: " << stylePath.string();
-	std::ifstream styleFile(stylePath);
-	if (!styleFile.is_open()) {
-		PLOGW << "failed to open json file: " << stylePath.string();
-		currentDrawStyle.clear();
-		return false;
-	}
-
 	try {
-		// parse json file
+		// read & parse json file
+		std::filesystem::path stylePath = dllPath.parent_path() / "RDFStyle.json";
+		PLOGD << "opening style json file: " << stylePath.string();
+		std::ifstream styleFile(stylePath);
+		if (!styleFile.is_open()) {
+			PLOGW << "failed to open json file: " << stylePath.string();
+			return false;
+		}
 		nlohmann::json styleJson;
 		styleFile >> styleJson;
 		styleFile.close();
@@ -399,6 +397,7 @@ auto CRDFPlugin::LoadDrawingStyle(std::string styleName) -> bool
 			auto& drawingStyleJson = styleJson.at(styleName);
 
 			// initialize settings
+			// if any value is missing in style json, values from plugin settings file are used
 			std::unique_lock<std::shared_mutex> lock(mtxDrawSettings);
 			currentDrawSettings.reset(new RDFCommon::draw_settings());
 			// load from json
@@ -455,13 +454,17 @@ auto CRDFPlugin::LoadDrawingStyle(std::string styleName) -> bool
 					PLOGV << SETTING_DRAW_REQUIRE_TX << ": " << currentDrawSettings->drawRequireTx;
 				}
 			}
-			// if everything goes smoothly, store the style name to prevent overwritten by LoadDrawingSettings
+			// store the style name to prevent overwritten by LoadDrawingSettings
 			currentDrawStyle = styleName;
+			std::string logMsg = std::format("Drawing style '{}' loaded successfully.", styleName);
+			PLOGI << logMsg;
+			DisplayMessageSilent(logMsg);
 			return true;
 		}
 		else {
-			PLOGW << "unable to find style " << styleName << " in: " << stylePath.string();
-			currentDrawStyle.clear();
+			std::string logMsg = std::format("Drawing style '{}' not found in JSON file.", styleName);
+			PLOGW << logMsg;
+			DisplayMessageSilent(logMsg);
 			return false;
 		}
 	}
