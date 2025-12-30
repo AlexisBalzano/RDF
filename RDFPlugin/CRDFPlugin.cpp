@@ -264,7 +264,7 @@ auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> 
 	{
 		// don't load drawing settings when using style
 		if (currentDrawStyle.size()) {
-			PLOGV << "using style: " << currentDrawStyle << ", bypass all other config";
+			PLOGV << "style '" << currentDrawStyle << "' in use";
 			return;
 		}
 		std::unique_lock<std::shared_mutex> lock(mtxDrawSettings);
@@ -402,7 +402,7 @@ auto CRDFPlugin::LoadDrawingStyle(std::string styleName) -> bool
 			currentDrawSettings.reset(new RDFCommon::draw_settings());
 			// load from json
 			for (auto& [key, val] : drawingStyleJson.items()) {
-				PLOGV << "style json: " << key << ": " << val.dump();
+				PLOGV << "style json: " << key << " = " << val.dump();
 				if (key == SETTING_RGB) {
 					RDFCommon::GetRGB(currentDrawSettings->rdfRGB, val);
 				}
@@ -462,7 +462,7 @@ auto CRDFPlugin::LoadDrawingStyle(std::string styleName) -> bool
 			return true;
 		}
 		else {
-			std::string logMsg = std::format("Drawing style '{}' not found in JSON file.", styleName);
+			std::string logMsg = std::format("Drawing style '{}' not found in json file.", styleName);
 			PLOGW << logMsg;
 			DisplayMessageSilent(logMsg);
 			return false;
