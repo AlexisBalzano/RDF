@@ -65,7 +65,7 @@ private:
 	// settings related functions
 	auto LoadTrackAudioSettings(void) -> void;
 	auto LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> screenPtr) -> void;
-	auto LoadDrawingStyle(std::string styleName) -> bool;
+	auto LoadDrawingStyle(const std::string& styleName) -> bool;
 
 	// functional things 
 	auto GetBridgeMode(void) -> bool;

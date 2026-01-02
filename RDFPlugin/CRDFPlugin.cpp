@@ -368,15 +368,23 @@ auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> 
 	}
 }
 
-auto CRDFPlugin::LoadDrawingStyle(std::string styleName) -> bool
+auto CRDFPlugin::LoadDrawingStyle(const std::string& styleName) -> bool
 {
 	// only after everything goes smoothly should it update currentDrawStyle
-	if (styleName.empty()) { // turn off style if name is not passed
-		PLOGI << "no drawing style specified, turning off style";
+
+	auto cancelStyle = [&]() -> void {
 		currentDrawStyle.clear();
+		std::string logMsg = "Drawing style is cancelled";
+		PLOGI << logMsg;
+		DisplayMessageSilent(logMsg);
 		LoadDrawingSettings(std::nullopt);
+		};
+
+	if (styleName.empty()) {
+		cancelStyle();
 		return false;
 	}
+
 	PLOGI << "loading drawing style '" << styleName << "'";
 
 	try {
@@ -462,7 +470,7 @@ auto CRDFPlugin::LoadDrawingStyle(std::string styleName) -> bool
 			return true;
 		}
 		else {
-			std::string logMsg = std::format("Drawing style '{}' not found in json file.", styleName);
+			std::string logMsg = std::format("Drawing style '{}' not found.", styleName);
 			PLOGW << logMsg;
 			DisplayMessageSilent(logMsg);
 			return false;
@@ -470,24 +478,21 @@ auto CRDFPlugin::LoadDrawingStyle(std::string styleName) -> bool
 	}
 	catch (nlohmann::json::exception& e) {
 		PLOGE << "json parsing error: " << e.what();
-		currentDrawStyle.clear();
-		LoadDrawingSettings(std::nullopt);
 		DisplayMessageUnread(std::string("Error: ") + e.what());
+		cancelStyle();
 		return false;
 	}
 	catch (std::exception& e) {
 		PLOGE << "Error: " << e.what();
-		currentDrawStyle.clear();
-		LoadDrawingSettings(std::nullopt);
 		DisplayMessageUnread(std::string("Error: ") + e.what());
+		cancelStyle();
 		return false;
 	}
 	catch (...)
 	{
 		PLOGE << UNKNOWN_ERROR_MSG;
-		currentDrawStyle.clear();
-		LoadDrawingSettings(std::nullopt);
 		DisplayMessageUnread(UNKNOWN_ERROR_MSG);
+		cancelStyle();
 		return false;
 	}
 }
@@ -903,7 +908,11 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 		// style
 		if (cmd.starts_with(COMMAND_STYLE)) {
 			// use original command line to address upper/lower cases in style name
-			return LoadDrawingStyle(std::string(sCommandLine).substr(COMMAND_STYLE.size()));
+			std::string styleName = std::string(sCommandLine).substr(COMMAND_STYLE.size());
+			std::string styleNameUpper = cmd.substr(COMMAND_STYLE.size());
+			bool useStyle = true;
+			RDFCommon::GetSettingOnOff(useStyle, styleNameUpper); // determine whether to cancel style
+			return LoadDrawingStyle(useStyle ? styleName : "");
 		}
 	}
 	catch (std::exception const& e)
