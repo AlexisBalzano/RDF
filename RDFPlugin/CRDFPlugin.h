@@ -64,12 +64,12 @@ private:
 
 	// settings related functions
 	auto LoadTrackAudioSettings(void) -> void;
-	auto LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> screenPtr) -> void;
+	auto LoadDrawingSettings(const std::optional<std::shared_ptr<CRDFScreen>>& screenPtr) -> void;
 	auto LoadDrawingStyle(const std::string& styleName) -> bool;
 
 	// functional things 
 	auto GetBridgeMode(void) -> bool;
-	auto GenerateDrawPosition(std::string callsign) -> RDFCommon::draw_position;
+	auto GenerateDrawPosition(const std::string& callsign) -> RDFCommon::draw_position;
 	auto TrackAudioTransmissionHandler(const nlohmann::json& data, const bool& rxEnd) -> void;
 	auto TrackAudioStationStatesHandler(const nlohmann::json& data) -> void;
 	auto TrackAudioStationStateUpdateHandler(const nlohmann::json& data) -> void;

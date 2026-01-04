@@ -232,7 +232,7 @@ auto CRDFPlugin::LoadTrackAudioSettings(void) -> void
 	PLOGD << "TrackAudio WebSocket started";
 }
 
-auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> screenPtr) -> void
+auto CRDFPlugin::LoadDrawingSettings(const std::optional<std::shared_ptr<CRDFScreen>>& screenPtr) -> void
 {
 	// pass nullopt to load plugin drawing settings, otherwise use ASR settings
 	// fallback logic: style on -> default
@@ -372,7 +372,7 @@ auto CRDFPlugin::LoadDrawingStyle(const std::string& styleName) -> bool
 {
 	// only after everything goes smoothly should it update currentDrawStyle
 
-	auto cancelStyle = [&]() -> void {
+	auto CancelStyle = [&]() -> void {
 		currentDrawStyle.clear();
 		std::string logMsg = "Drawing style is cancelled";
 		PLOGI << logMsg;
@@ -381,7 +381,7 @@ auto CRDFPlugin::LoadDrawingStyle(const std::string& styleName) -> bool
 		};
 
 	if (styleName.empty()) {
-		cancelStyle();
+		CancelStyle();
 		return false;
 	}
 
@@ -479,20 +479,20 @@ auto CRDFPlugin::LoadDrawingStyle(const std::string& styleName) -> bool
 	catch (nlohmann::json::exception& e) {
 		PLOGE << "json parsing error: " << e.what();
 		DisplayMessageUnread(std::string("Error: ") + e.what());
-		cancelStyle();
+		CancelStyle();
 		return false;
 	}
 	catch (std::exception& e) {
 		PLOGE << "Error: " << e.what();
 		DisplayMessageUnread(std::string("Error: ") + e.what());
-		cancelStyle();
+		CancelStyle();
 		return false;
 	}
 	catch (...)
 	{
 		PLOGE << UNKNOWN_ERROR_MSG;
 		DisplayMessageUnread(UNKNOWN_ERROR_MSG);
-		cancelStyle();
+		CancelStyle();
 		return false;
 	}
 }
@@ -519,7 +519,7 @@ auto CRDFPlugin::GetBridgeMode(void) -> bool
 	return true;
 }
 
-auto CRDFPlugin::GenerateDrawPosition(std::string callsign) -> RDFCommon::draw_position
+auto CRDFPlugin::GenerateDrawPosition(const std::string& callsign) -> RDFCommon::draw_position
 {
 	// return radius=0 for no draw
 	try
