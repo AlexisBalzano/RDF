@@ -95,7 +95,7 @@ This table shows all RDF drawing parameters. All entries allow per-ASR configura
 
 ### Drawing Parameters Schematic
 
-<img src="docs/drawing-parameters-schematic.png" style="width: 50%;">
+<img src="docs/drawing-parameters-schematic.svg" width="80%">
 
 ### Drawing Parameters Command Line Functions
 
@@ -122,11 +122,11 @@ This table shows all RDF drawing parameters. All entries allow per-ASR configura
 
 **For transmitting pilots:**
 
-<img src="docs/random-offset-schematic-pilots.png" style="width: 50%;">
+<img src="docs/random-offset-schematic-pilots.svg" width="80%">
 
 **For transmitting controllers:**
 
-<img src="docs/random-offset-schematic-controllers.png" style="width: 35%;">
+<img src="docs/random-offset-schematic-controllers.svg" width="50%">
 
 ## Configuration Examples
 
