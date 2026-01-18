@@ -382,7 +382,7 @@ auto CRDFPlugin::LoadDrawingStyle(const std::string& styleName) -> bool
 
 	if (styleName.empty()) {
 		CancelStyle();
-		return false;
+		return true;
 	}
 
 	PLOGI << "loading drawing style '" << styleName << "'";

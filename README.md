@@ -111,6 +111,7 @@ This table shows all RDF drawing parameters. All entries allow per-ASR configura
   + `[Style Name]` is case-sensitive and must be exact match.
   + Re-application is needed after hot-editting JSON file.
   + STYLE settings will not be saved when exiting EuroScope.
+  + Use `.RDF STYLE OFF/0` or enter empty style name (keep the trailing ` `) to cancel style.
 
 ### Random Offset Schematic
 
