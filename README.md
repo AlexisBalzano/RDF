@@ -49,17 +49,14 @@ This table shows general configurable items that would affect the plugin globall
 
 ### General Command Line Functions
 
-`.RDF REFRESH`
++ `.RDF REFRESH`
+  + Clear transmission records.
+  + (*Audio for VATSIM standalone client*) set all channels to off (except primary & active ATIS).
+  + (*TrackAudio*, if **Bridge** is **ON**) try to synchronize all RX/TX with *TrackAudio*.
++ `.RDF RELOAD`
+  + Clear transmission records.
+  + Reset *TrackAudio* connection.
 
-+ Clear transmission records.
-+ (*Audio for VATSIM standalone client*) set all channels to off (except primary & active ATIS).
-+ (*TrackAudio*, if **Bridge** is **ON**) try to synchronize all RX/TX with *TrackAudio*.
-
-`.RDF RELOAD`
-
-+ Clear transmission records.
-+ Reset *TrackAudio* connection.
-  
 > [!TIP]
 > To change the endpoint or mode for *TrackAudio* without exitting EuroScope, you may modify plugin settings file, reload settings file inside EuroScope, then run `.RDF RELOAD`.
 >
@@ -99,24 +96,21 @@ This table shows all RDF drawing parameters. All entries allow per-ASR configura
 
 ### Drawing Parameters Command Line Functions
 
-`.RDF [Keyword] [Value]`
++ `.RDF [Keyword] [Value]`
+  + E.g. `.RDF CTRGB 255:255:0` will set drawing color to yellow for concurrent transmission.
+  + Replace `_____` with value in low/high altitude/precision directly, e.g. `.RDF ALTITUDE L10000`
+  + Settings will be saved to plugin settings file.
++ `.RDF ASR [Keyword] [Value]`
+  + `[Keyword]` and `[Value]` are the same as above.
+  + Settings will be saved to ASR file.
+  + E.g. `.RDF ASR DRAW 0` will disable RDF in current ASR.
 
-+ E.g. `.RDF CTRGB 255:255:0` will set drawing color to yellow for concurrent transmission.
-+ Replace `_____` with value in low/high altitude/precision directly, e.g. `.RDF ALTITUDE L10000`
-+ Settings will be saved to plugin settings file.
-
-`.RDF ASR [Keyword] [Value]`
-
-+ `[Keyword]` and `[Value]` are the same as above.
-+ Settings will be saved to ASR file.
-+ E.g. `.RDF ASR DRAW 0` will disable RDF in current ASR.
-
-`.RDF STYLE [Style Name]`
-
-+ Designed for pre-defined scenarios and real-time switching.
-+ Requires an **RDFStyle.json** file next to DLL file. [JSON format](#example---style)
-+ `[Style Name]` is the name of the style. Must be exact match (case-sensitive).
-+ STYLE settings will not be saved. Manual reload is required after restarting EuroScope.
++ `.RDF STYLE [Style Name]`
+  + Designed for pre-defined scenarios and real-time switching.
+  + Requires an **RDFStyle.json** file next to DLL file. [JSON format](#example---style)
+  + `[Style Name]` is case-sensitive and must be exact match.
+  + Re-application is needed after hot-editting JSON file.
+  + STYLE settings will not be saved when exiting EuroScope.
 
 ### Random Offset Schematic
 
