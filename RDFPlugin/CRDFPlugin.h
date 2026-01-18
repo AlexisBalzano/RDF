@@ -13,15 +13,21 @@ class CRDFPlugin : public EuroScopePlugIn::CPlugIn, public std::enable_shared_fr
 private:
 	friend class CRDFScreen;
 
+	// directory
+	std::filesystem::path dllPath;
+
 	// screen controls and drawing params
 	std::vector<std::shared_ptr<CRDFScreen>> vecScreen; // index is screen ID (incremental int)
 	std::shared_mutex mtxDrawSettings;
 	std::shared_ptr<RDFCommon::draw_settings> currentDrawSettings;
+	std::string currentDrawStyle;
 
-	// drawing records
+	// drawing records and transmitting frequency records
 	std::shared_mutex mtxTransmission;
 	RDFCommon::callsign_position curTransmission;
 	RDFCommon::callsign_position preTransmission;
+	std::shared_mutex mtxTxFrequencies;
+	std::set<int> curTxFrequencies; // in kHz
 
 	// TrackAudio WebSocket
 	std::string addressTrackAudio;
@@ -41,7 +47,7 @@ private:
 	   NULL,
 	   NULL,
 	   NULL,
-	   "RDFHiddenWindowClass"
+	   TEXT("RDFHiddenWindowClass")
 	};
 	WNDCLASS windowClassAFV = {
 	   NULL,
@@ -53,16 +59,17 @@ private:
 	   NULL,
 	   NULL,
 	   NULL,
-	   "AfvBridgeHiddenWindowClass"
+	   TEXT("AfvBridgeHiddenWindowClass")
 	};
 
 	// settings related functions
 	auto LoadTrackAudioSettings(void) -> void;
-	auto LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> screenPtr) -> void;
+	auto LoadDrawingSettings(const std::optional<std::shared_ptr<CRDFScreen>>& screenPtr) -> void;
+	auto LoadDrawingStyle(const std::string& styleName) -> bool;
 
 	// functional things 
 	auto GetBridgeMode(void) -> bool;
-	auto GenerateDrawPosition(std::string callsign) -> RDFCommon::draw_position;
+	auto GenerateDrawPosition(const std::string& callsign) -> RDFCommon::draw_position;
 	auto TrackAudioTransmissionHandler(const nlohmann::json& data, const bool& rxEnd) -> void;
 	auto TrackAudioStationStatesHandler(const nlohmann::json& data) -> void;
 	auto TrackAudioStationStateUpdateHandler(const nlohmann::json& data) -> void;

@@ -30,79 +30,88 @@ auto CRDFScreen::OnAsrContentToBeClosed(void) -> void
 
 auto CRDFScreen::OnRefresh(HDC hDC, int Phase) -> void
 {
-	if (!m_Opened) return;
-	if (Phase == EuroScopePlugIn::REFRESH_PHASE_BACK_BITMAP) {
-		PLOGD << "updating screen, ID: " << m_ID;
-		m_Plugin.lock()->LoadDrawingSettings(shared_from_this());
-		return;
-	}
-	if (Phase != EuroScopePlugIn::REFRESH_PHASE_AFTER_TAGS) return;
-
-	RDFCommon::callsign_position drawPosition = m_Plugin.lock()->GetDrawStations();
-	if (drawPosition.empty()) {
-		return;
-	}
-
-	PLOGV << "drawing RDF";
-	std::shared_lock dlock(m_Plugin.lock()->mtxDrawSettings); // prevent accidental modification
-	const RDFCommon::draw_settings params = *m_Plugin.lock()->currentDrawSettings;
-	dlock.unlock();
-
-	HGDIOBJ oldBrush = SelectObject(hDC, GetStockObject(HOLLOW_BRUSH));
-	COLORREF penColor = drawPosition.size() > 1 ? params.rdfConcurRGB : params.rdfRGB;
-	HPEN hPen = CreatePen(PS_SOLID, 1, penColor);
-	HGDIOBJ oldPen = SelectObject(hDC, hPen);
-
-	for (auto& callsignPos : drawPosition) {
-		POINT pPos = ConvertCoordFromPositionToPixel(callsignPos.second.position);
-		if (PlaneIsVisible(pPos, GetRadarArea())) {
-			double drawR = callsignPos.second.radius;
-			// deal with drawing radius when threshold enabled
-			if (params.circleThreshold >= 0) {
-				EuroScopePlugIn::CPosition posLD, posRU;
-				GetDisplayArea(&posLD, &posRU);
-				POINT pLD = ConvertCoordFromPositionToPixel(posLD);
-				POINT pRU = ConvertCoordFromPositionToPixel(posRU);
-				double dst = sqrt(pow(pRU.x - pLD.x, 2) + pow(pRU.y - pLD.y, 2));
-				drawR = drawR * dst / posLD.DistanceTo(posRU);
-			}
-			if (drawR >= (double)params.circleThreshold) {
-				// draw circle
-				if (params.circleThreshold >= 0) {
-					// using position as boundary xy
-					EuroScopePlugIn::CPosition pl = callsignPos.second.position;
-					RDFCommon::AddOffset(pl, 270, callsignPos.second.radius);
-					EuroScopePlugIn::CPosition pt = callsignPos.second.position;
-					RDFCommon::AddOffset(pt, 0, callsignPos.second.radius);
-					EuroScopePlugIn::CPosition pr = callsignPos.second.position;
-					RDFCommon::AddOffset(pr, 90, callsignPos.second.radius);
-					EuroScopePlugIn::CPosition pb = callsignPos.second.position;
-					RDFCommon::AddOffset(pb, 180, callsignPos.second.radius);
-					Ellipse(hDC,
-						ConvertCoordFromPositionToPixel(pl).x,
-						ConvertCoordFromPositionToPixel(pt).y,
-						ConvertCoordFromPositionToPixel(pr).x,
-						ConvertCoordFromPositionToPixel(pb).y
-					);
-				}
-				else {
-					// using pixel as boundary xy
-					Ellipse(hDC, pPos.x - (int)round(drawR), pPos.y - (int)round(drawR), pPos.x + (int)round(drawR), pPos.y + (int)round(drawR));
-				}
-				continue;
-			}
+	try {
+		if (!m_Opened) return;
+		if (Phase == EuroScopePlugIn::REFRESH_PHASE_BACK_BITMAP) {
+			PLOGD << "updating screen, ID: " << m_ID;
+			m_Plugin.lock()->LoadDrawingSettings(shared_from_this());
+			return;
 		}
-		// draw line
-		POINT oldPoint;
-		MoveToEx(hDC, (GetRadarArea().right - GetRadarArea().left) / 2, (GetRadarArea().bottom - GetRadarArea().top) / 2, &oldPoint);
-		LineTo(hDC, pPos.x, pPos.y);
-		MoveToEx(hDC, oldPoint.x, oldPoint.y, NULL);
-	}
+		if (Phase != EuroScopePlugIn::REFRESH_PHASE_AFTER_TAGS) return;
 
-	SelectObject(hDC, oldBrush);
-	SelectObject(hDC, oldPen);
-	DeleteObject(hPen);
-	PLOGV << "draw complete";
+		RDFCommon::callsign_position drawPosition = m_Plugin.lock()->GetDrawStations();
+		if (drawPosition.empty()) {
+			return;
+		}
+
+		PLOGV << "drawing RDF";
+		std::shared_lock dlock(m_Plugin.lock()->mtxDrawSettings); // prevent accidental modification
+		const RDFCommon::draw_settings params = *m_Plugin.lock()->currentDrawSettings;
+		dlock.unlock();
+
+		HGDIOBJ oldBrush = SelectObject(hDC, GetStockObject(HOLLOW_BRUSH));
+		COLORREF penColor = drawPosition.size() > 1 ? params.rdfConcurRGB : params.rdfRGB;
+		HPEN hPen = CreatePen(PS_SOLID, 1, penColor);
+		HGDIOBJ oldPen = SelectObject(hDC, hPen);
+
+		for (auto& callsignPos : drawPosition) {
+			POINT pPos = ConvertCoordFromPositionToPixel(callsignPos.second.position);
+			if (PlaneIsVisible(pPos, GetRadarArea())) {
+				double drawR = callsignPos.second.radius;
+				// deal with drawing radius when threshold enabled
+				if (params.circleThreshold >= 0) {
+					EuroScopePlugIn::CPosition posLD, posRU;
+					GetDisplayArea(&posLD, &posRU);
+					POINT pLD = ConvertCoordFromPositionToPixel(posLD);
+					POINT pRU = ConvertCoordFromPositionToPixel(posRU);
+					double dst = sqrt(pow(pRU.x - pLD.x, 2) + pow(pRU.y - pLD.y, 2));
+					drawR = drawR * dst / posLD.DistanceTo(posRU);
+				}
+				if (drawR >= (double)params.circleThreshold) {
+					// draw circle
+					if (params.circleThreshold >= 0) {
+						// using position as boundary xy
+						EuroScopePlugIn::CPosition pl = callsignPos.second.position;
+						RDFCommon::AddOffset(pl, 270, callsignPos.second.radius);
+						EuroScopePlugIn::CPosition pt = callsignPos.second.position;
+						RDFCommon::AddOffset(pt, 0, callsignPos.second.radius);
+						EuroScopePlugIn::CPosition pr = callsignPos.second.position;
+						RDFCommon::AddOffset(pr, 90, callsignPos.second.radius);
+						EuroScopePlugIn::CPosition pb = callsignPos.second.position;
+						RDFCommon::AddOffset(pb, 180, callsignPos.second.radius);
+						Ellipse(hDC,
+							ConvertCoordFromPositionToPixel(pl).x,
+							ConvertCoordFromPositionToPixel(pt).y,
+							ConvertCoordFromPositionToPixel(pr).x,
+							ConvertCoordFromPositionToPixel(pb).y
+						);
+					}
+					else {
+						// using pixel as boundary xy
+						Ellipse(hDC, pPos.x - (int)round(drawR), pPos.y - (int)round(drawR), pPos.x + (int)round(drawR), pPos.y + (int)round(drawR));
+					}
+					continue;
+				}
+			}
+			// draw line
+			POINT oldPoint;
+			MoveToEx(hDC, (GetRadarArea().right - GetRadarArea().left) / 2, (GetRadarArea().bottom - GetRadarArea().top) / 2, &oldPoint);
+			LineTo(hDC, pPos.x, pPos.y);
+			MoveToEx(hDC, oldPoint.x, oldPoint.y, NULL);
+		}
+
+		SelectObject(hDC, oldBrush);
+		SelectObject(hDC, oldPen);
+		DeleteObject(hPen);
+		PLOGV << "draw complete";
+	}
+	catch (std::exception const& e)
+	{
+		PLOGE << "Error: " << e.what();
+	}
+	catch (...) {
+		PLOGE << UNKNOWN_ERROR_MSG;
+	}
 }
 
 auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
@@ -127,14 +136,9 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 		else {
 			return false;
 		}
-		// match config
+
+		// colors
 		std::smatch match;
-		std::regex rxDraw(R"(^DRAW (ON|OFF)$)", std::regex_constants::icase);
-		if (std::regex_match(cmd, match, rxDraw)) {
-			bool mode = match[1].str() == "ON";
-			SaveDrawSetting(SETTING_ENABLE_DRAW, "Enable RDF draw", std::to_string(mode), asr);
-			return true;
-		}
 		std::regex rxRGB(R"(^(RGB|CTRGB) (\S+)$)", std::regex_constants::icase);
 		if (std::regex_match(cmd, match, rxRGB)) {
 			auto bufferMode = match[1].str();
@@ -151,7 +155,7 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 				return true;
 			}
 		}
-		// no need for regex
+		// using sscanf_s for those with numbers
 		int bufferRadius;
 		if (sscanf_s(cmd.c_str(), "RADIUS %d", &bufferRadius) == 1) {
 			if (bufferRadius > 0) {
@@ -192,10 +196,27 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 				return true;
 			}
 		}
-		int bufferCtrl;
-		if (sscanf_s(cmd.c_str(), "CONTROLLER %d", &bufferCtrl) == 1) {
-			SaveDrawSetting(SETTING_DRAW_CONTROLLERS, "Draw controllers", std::to_string(bufferCtrl), asr);
-			return true;
+		// on/off switches
+		if (cmd.starts_with("DRAW ")) {
+			bool opt;
+			if (RDFCommon::GetSettingOnOff(opt, cmd.substr(5))) {
+				SaveDrawSetting(SETTING_ENABLE_DRAW, "Enable RDF draw", opt ? "1" : "0", asr);
+				return true;
+			}
+		}
+		if (cmd.starts_with("CONTROLLER ")) {
+			bool opt;
+			if (RDFCommon::GetSettingOnOff(opt, cmd.substr(11))) {
+				SaveDrawSetting(SETTING_DRAW_CONTROLLERS, "Draw controllers", opt ? "1" : "0", asr);
+				return true;
+			}
+		}
+		if (cmd.starts_with("TX ")) {
+			bool opt;
+			if (RDFCommon::GetSettingOnOff(opt, cmd.substr(3))) {
+				SaveDrawSetting(SETTING_DRAW_REQUIRE_TX, "Drawing requires TX", opt ? "1" : "0", asr);
+				return true;
+			}
 		}
 	}
 	catch (std::exception const& e)

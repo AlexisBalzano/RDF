@@ -31,9 +31,9 @@ Do the same work as [*afv-euroscope-bridge*](https://github.com/AndyTWF/afv-euro
 ## Configurations
 
 > [!NOTE]
-> All command line functions are case-insensitive.
+> All command line functions are case-insensitive, except `[Style Name]` in `.RDF STYLE [Style Name]`.
 
-### General
+### General Plugin Settings
 
 This table shows general configurable items that would affect the plugin globally.
 
@@ -49,29 +49,28 @@ This table shows general configurable items that would affect the plugin globall
 
 ### General Command Line Functions
 
-`.RDF REFRESH`
++ `.RDF REFRESH`
+  + Clear transmission records.
+  + (*Audio for VATSIM standalone client*) set all channels to off (except primary & active ATIS).
+  + (*TrackAudio*, if **Bridge** is **ON**) try to synchronize all RX/TX with *TrackAudio*.
++ `.RDF RELOAD`
+  + Clear transmission records.
+  + Reset *TrackAudio* connection.
 
-+ Clear transmission records.
-+ (*Audio for VATSIM standalone client*) set all channels to off (except primary & active ATIS).
-+ (*TrackAudio*, if **Bridge** is **ON**) try to synchronize all RX/TX with *TrackAudio*.
-
-`.RDF RELOAD`
-
-+ Clear transmission records.
-+ Reset *TrackAudio* connection.
-  
 > [!TIP]
 > To change the endpoint or mode for *TrackAudio* without exitting EuroScope, you may modify plugin settings file, reload settings file inside EuroScope, then run `.RDF RELOAD`.
 >
 > To change log level, the only way is to unload & reload RDFPlugin.dll inside EuroScope plugin setup dialog.
 
-### Drawing Parameters
+## Drawing Parameters
 
 This table shows all RDF drawing parameters. All entries allow per-ASR configuration.
 
 | Entry Name                | Command Line Keyword |    Range    | Default Value |
 | ------------------------- | -------------------: | :---------: | :-----------: |
 | EnableDraw                |               `DRAW` |   0 or 1    |       1       |
+| DrawRequireTx             |                 `TX` |   0 or 1    |       0       |
+| DrawControllers           |         `CONTROLLER` |   0 or 1    |       0       |
 | RGB                       |                `RGB` | RRR:GGG:BBB |  255:255:255  |
 | ConcurrentTransmissionRGB |              `CTRGB` | RRR:GGG:BBB |    255:0:0    |
 | Radius                    |             `RADIUS` |  (0, +inf)  |      20       |
@@ -81,56 +80,60 @@ This table shows all RDF drawing parameters. All entries allow per-ASR configura
 | HighAltitude              |    `ALTITUDE H_____` |  [0, +inf)  |       0       |
 | LowPrecision              |   `PRECISION L_____` |             |       0       |
 | HighPrecision             |   `PRECISION H_____` |  [0, +inf)  |       0       |
-| DrawControllers           |         `CONTROLLER` |   0 or 1    |       0       |
 
 + **EnableDraw** controls RDF drawing functionality. 0 means OFF.
++ **DrawRequireTx** controls whether transmitting stations should only be drawn on active tx frequencies. 0 means OFF. (Not active in Observer Mode, Only compatible with TrackAudio)
++ **DrawControllers** controls whether transmitting controllers should be drawn as well. 0 means OFF.
 + **RGB, ConcurrentTransmissionRGB** define drawing colors when single or multiple stations are transmitting at the same time.
 + **Radius, Threshold, Precision, LowAltitude, HighAltitude, LowPrecision, HighPrecision** see [Random Offset Schematic](#random-offset-schematic) below.
-+ **DrawControllers** controls whether transimitting controllers should be drawn as well. 0 means OFF.
 
-> [!NOTE]
-> When an ASR is opened, the plugin will use the configurations in the sequence of **ASR > plugin settings file > default value**.
+> [!TIP]
+> For all boolean parameters or settings, both 0/1 and off/on are accepted in command line functions.
+
+### Drawing Parameters Schematic
+
+<img src="docs/drawing-parameters-schematic.svg" width="80%">
 
 ### Drawing Parameters Command Line Functions
 
-`.RDF [Keyword] [Value]`
++ `.RDF [Keyword] [Value]`
+  + E.g. `.RDF CTRGB 255:255:0` will set drawing color to yellow for concurrent transmission.
+  + Replace `_____` with value in low/high altitude/precision directly, e.g. `.RDF ALTITUDE L10000`
+  + Settings will be saved to plugin settings file.
++ `.RDF ASR [Keyword] [Value]`
+  + `[Keyword]` and `[Value]` are the same as above.
+  + Settings will be saved to ASR file.
+  + E.g. `.RDF ASR DRAW 0` will disable RDF in current ASR.
 
-+ E.g. `.RDF CTRGB 255:255:0` will set drawing color to yellow for concurrent transmission.
-+ Replace `_____` with value in low/high altitude/precision directly, e.g. `.RDF ALTITUDE L10000`
-+ Settings will be saved to plugin settings file.
-
-`.RDF ASR [Keyword] [Value]`
-
-+ `[Keyword]` and `[Value]` are the same as above.
-+ Settings will be saved to ASR file.
-+ E.g. `.RDF ASR DRAW 0` will disable RDF in current ASR.
++ `.RDF STYLE [Style Name]`
+  + Designed for pre-defined scenarios and real-time switching.
+  + Requires an **RDFStyle.json** file next to DLL file. [JSON format](#example---style)
+  + `[Style Name]` is case-sensitive and must be exact match.
+  + Re-application is needed after hot-editting JSON file.
+  + STYLE settings will not be saved when exiting EuroScope.
+  + Use `.RDF STYLE OFF/0` or enter empty style name (keep the trailing ` `) to cancel style.
 
 ### Random Offset Schematic
 
-+ **LowAltitude** in feet, is used to filter aircrafts. Only aircrafts not lower than this altitude will be radio-direction-found.
-+ A circle will only be drawn within radar display area. Otherwise a line leading to the target is drawn.
-+ Random offsets (when enabled) follow a normal distribution. 99.74% (-3σ ~ 3σ) of offsets are within given precision.
-+ **Threshold < 0**:
-  + **Radius** is in pixel. Circles are always drawn in fixed pixel radius.
-  + **Precision** is used for random offset in nautical miles.
-  + Low/High settings are ignored.
-+ **Threshold >= 0**:
-  + **Threshold** is in pixel. **Radius** is in nautical miles. **Precision** is in nautical miles.
-  + Circle size will change according to zoom level. Circles are drawn only when its pixel radius is not less than **Threshold**. Otherwise a line leading to the target is drawn.
-  + When **LowPrecision > 0**:
-    + Deprecates **Radius**. All circle radius is determined by precision.
-    + If **HighPrecision > 0 and HighAltitude > LowAltitude**:
-      + Overrides **Precision**. Dynamaic precision is implemented taking aircraft altitude into account.
-      + Precision (= radius) is linearly interpolated or extrapolated by altitude and low/high settings. `Precision = LowPrecision + (Altitude - LowAltitude) / (HighAltitude - LowAltitude) * (HighPrecision - LowPrecision)`
-    + Otherwise **LowPrecision** precedes **Precision** when determining random offset.
+**For transmitting pilots:**
 
-### Samples - Plugin Settings File
+<img src="docs/random-offset-schematic-pilots.svg" width="80%">
+
+**For transmitting controllers:**
+
+<img src="docs/random-offset-schematic-controllers.svg" width="50%">
+
+## Configuration Examples
+
+### Example - Plugin Settings File
 
 ```text
 RDF Plugin for Euroscope:LogLevel:none
 RDF Plugin for Euroscope:Bridge:1
 RDF Plugin for Euroscope:Endpoint:127.0.0.1:49080
 RDF Plugin for Euroscope:EnableDraw:1
+RDF Plugin for Euroscope:DrawRequireTx:0
+RDF Plugin for Euroscope:DrawControllers:0
 RDF Plugin for Euroscope:RGB:255:255:255
 RDF Plugin for Euroscope:ConcurrentTransmissionRGB:255:0:0
 RDF Plugin for Euroscope:Radius:20
@@ -140,7 +143,6 @@ RDF Plugin for Euroscope:LowAltitude:0
 RDF Plugin for Euroscope:HighAltitude:0
 RDF Plugin for Euroscope:LowPrecision:0
 RDF Plugin for Euroscope:HighPrecision:0
-RDF Plugin for Euroscope:DrawControllers:0
 ```
 
 ```text
@@ -149,6 +151,8 @@ RDF Plugin for Euroscope:DrawControllers:0
 RDF Plugin for Euroscope:LogLevel:debug
 ; I use Parallels Desktop and run TrackAudio in hosting macOS
 RDF Plugin for Euroscope:Endpoint:10.211.55.2:49080
+RDF Plugin for Euroscope:DrawRequireTx:1
+RDF Plugin for Euroscope:DrawControllers:1
 RDF Plugin for Euroscope:RGB:0:255:0
 RDF Plugin for Euroscope:ConcurrentTransmissionRGB:255:0:0
 ; Drawing parameters are for radar ASRs
@@ -159,10 +163,9 @@ RDF Plugin for Euroscope:LowAltitude:3000
 RDF Plugin for Euroscope:LowPrecision:2
 RDF Plugin for Euroscope:HighAltitude:41100
 RDF Plugin for Euroscope:HighPrecision:25
-RDF Plugin for Euroscope:DrawControllers:1
 ```
 
-### Samples - Per-ASR Drawing Parameters
+### Example - Per-ASR Drawing Parameters
 
 ```text
 ; Disables RDF in this ASR
@@ -171,9 +174,6 @@ PLUGIN:RDF Plugin for Euroscope:EnableDraw:0
 
 ```text
 ; Always draw lines instead of circles, set Threshold to big number
-PLUGIN:RDF Plugin for Euroscope:EnableDraw:1
-PLUGIN:RDF Plugin for Euroscope:RGB:255:255:255
-PLUGIN:RDF Plugin for Euroscope:ConcurrentTransmissionRGB:255:255:0
 PLUGIN:RDF Plugin for Euroscope:Radius:20
 PLUGIN:RDF Plugin for Euroscope:Threshold:99999
 PLUGIN:RDF Plugin for Euroscope:Precision:0
@@ -181,19 +181,58 @@ PLUGIN:RDF Plugin for Euroscope:LowAltitude:0
 PLUGIN:RDF Plugin for Euroscope:HighAltitude:0
 PLUGIN:RDF Plugin for Euroscope:LowPrecision:0
 PLUGIN:RDF Plugin for Euroscope:HighPrecision:0
-PLUGIN:RDF Plugin for Euroscope:DrawControllers:1
 ```
 
 ```text
 ; My own setup for ground ASRs
-; Circle are centered to aircraft with fixed radius of 20
+; Circle are centered to aircraft with fixed radius of 20 pixels
 PLUGIN:RDF Plugin for Euroscope:Radius:20
 PLUGIN:RDF Plugin for Euroscope:Threshold:-1
 PLUGIN:RDF Plugin for Euroscope:Precision:0
 PLUGIN:RDF Plugin for Euroscope:LowAltitude:0
-PLUGIN:RDF Plugin for Euroscope:LowPrecision:50
-PLUGIN:RDF Plugin for Euroscope:DrawControllers:1
+PLUGIN:RDF Plugin for Euroscope:HighAltitude:0
+PLUGIN:RDF Plugin for Euroscope:LowPrecision:0
+PLUGIN:RDF Plugin for Euroscope:HighPrecision:0
 ```
+
+### Example - STYLE
+
+> [!NOTE]
+> Any items not defined in JSON file will be treated as plugin default.
+
+```json
+{
+  "LANGEN": {
+    "Radius": 20,
+    "Precision": 0,
+    "Threshold": 999999,
+    "LowAltitude": 0,
+    "HighAltitude": 0,
+    "LowPrecision": 10,
+    "HighPrecision": 20,
+    "RGB": "114:150:102",
+    "ConcurrentTransmissionRGB": "114:150:102",
+    "DrawControllers": false,
+    "DrawRequireTx": false
+  },
+  "RING": {
+    "Radius": 20,
+    "Precision": 0,
+    "Threshold": -1,
+    "LowAltitude": 0,
+    "HighAltitude": 0,
+    "LowPrecision": 0,
+    "HighPrecision": 0,
+    "RGB": "114:150:102",
+    "ConcurrentTransmissionRGB": "114:150:102",
+    "DrawControllers": false,
+    "DrawRequireTx": false
+  }
+}
+```
+
+> [!TIP]
+> In the above example, `LANGEN` and `RING` are style names.
 
 ## Known Issues
 

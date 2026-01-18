@@ -15,7 +15,7 @@ CRDFPlugin::CRDFPlugin()
 	HMODULE pluginModule = AfxGetInstanceHandle();
 	TCHAR pBuffer[MAX_PATH] = { 0 };
 	DWORD moduleNameRes = GetModuleFileName(pluginModule, pBuffer, sizeof(pBuffer) / sizeof(TCHAR) - 1);
-	std::filesystem::path dllPath = moduleNameRes != 0 ? pBuffer : "";
+	dllPath = moduleNameRes != 0 ? pBuffer : TEXT("");
 	auto logPath = dllPath.parent_path() / "RDFPlugin.log";
 	static plog::RollingFileAppender<plog::TxtFormatterUtcTime> rollingAppender(logPath.c_str()); // no rolling bahaviour
 #ifdef _DEBUG
@@ -40,8 +40,8 @@ CRDFPlugin::CRDFPlugin()
 	PLOGD << "creating AFV hidden windows";
 	RegisterClass(&windowClassRDF);
 	hiddenWindowRDF = CreateWindow(
-		"RDFHiddenWindowClass",
-		"RDFHiddenWindow",
+		TEXT("RDFHiddenWindowClass"),
+		TEXT("RDFHiddenWindow"),
 		NULL,
 		0,
 		0,
@@ -60,8 +60,8 @@ CRDFPlugin::CRDFPlugin()
 	// AFV bridge window
 	RegisterClass(&windowClassAFV);
 	hiddenWindowAFV = CreateWindow(
-		"AfvBridgeHiddenWindowClass",
-		"AfvBridgeHiddenWindow",
+		TEXT("AfvBridgeHiddenWindowClass"),
+		TEXT("AfvBridgeHiddenWindow"),
 		NULL,
 		0,
 		0,
@@ -88,12 +88,9 @@ CRDFPlugin::CRDFPlugin()
 	socketTrackAudio.setMaxWaitBetweenReconnectionRetries(TRACKAUDIO_HEARTBEAT_SEC * 2000); // ms
 	socketTrackAudio.setPingInterval(TRACKAUDIO_HEARTBEAT_SEC);
 	socketTrackAudio.setOnMessageCallback(std::bind_front(&CRDFPlugin::TrackAudioMessageHandler, this));
-
-	std::unique_lock dlock(mtxDrawSettings);
-	currentDrawSettings = std::make_shared<RDFCommon::draw_settings>();
-	dlock.unlock();
-
 	LoadTrackAudioSettings();
+
+	// initialize default drawing settings
 	LoadDrawingSettings(std::nullopt);
 
 	auto logMsg = std::format("Version {} Loaded.", MY_PLUGIN_VERSION);
@@ -114,11 +111,11 @@ CRDFPlugin::~CRDFPlugin()
 	if (hiddenWindowRDF != nullptr) {
 		DestroyWindow(hiddenWindowRDF);
 	}
-	UnregisterClass("RDFHiddenWindowClass", nullptr);
+	UnregisterClass(TEXT("RDFHiddenWindowClass"), nullptr);
 	if (hiddenWindowAFV != nullptr) {
 		DestroyWindow(hiddenWindowAFV);
 	}
-	UnregisterClass("AfvBridgeHiddenWindowClass", nullptr);
+	UnregisterClass(TEXT("AfvBridgeHiddenWindowClass"), nullptr);
 
 	PLOGI << "RDFPlugin is unloaded";
 }
@@ -235,10 +232,11 @@ auto CRDFPlugin::LoadTrackAudioSettings(void) -> void
 	PLOGD << "TrackAudio WebSocket started";
 }
 
-auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> screenPtr) ->  void
+auto CRDFPlugin::LoadDrawingSettings(const std::optional<std::shared_ptr<CRDFScreen>>& screenPtr) -> void
 {
 	// pass nullopt to load plugin drawing settings, otherwise use ASR settings
-	// fallback logig: ASR -> plugin -> default
+	// fallback logic: style on -> default
+	//                 style off -> ASR -> plugin -> default
 	// Schematic: high altitude/precision optional. low altitude used for filtering regardless of others
 	// threshold < 0 will use circleRadius in pixel, circlePrecision for offset, low/high settings ignored
 	// lowPrecision > 0 and highPrecision > 0 and lowAltitude < highAltitude, will override circleRadius and circlePrecision with dynamic precision/radius
@@ -264,6 +262,11 @@ auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> 
 
 	try
 	{
+		// don't load drawing settings when using style
+		if (currentDrawStyle.size()) {
+			PLOGV << "style '" << currentDrawStyle << "' in use";
+			return;
+		}
 		std::unique_lock<std::shared_mutex> lock(mtxDrawSettings);
 		// initialize settings
 		currentDrawSettings.reset(new RDFCommon::draw_settings());
@@ -345,6 +348,12 @@ auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> 
 			currentDrawSettings->drawController = (bool)std::stoi(cstrController);
 			PLOGV << SETTING_DRAW_CONTROLLERS << ": " << currentDrawSettings->drawController;
 		}
+		auto cstrDrawRequireTx = GetSetting(SETTING_DRAW_REQUIRE_TX);
+		if (cstrDrawRequireTx.size())
+		{
+			currentDrawSettings->drawRequireTx = (bool)std::stoi(cstrDrawRequireTx);
+			PLOGV << SETTING_DRAW_REQUIRE_TX << ": " << currentDrawSettings->drawRequireTx;
+		}
 		PLOGD << "drawing settings loaded";
 	}
 	catch (std::exception const& e)
@@ -356,6 +365,135 @@ auto CRDFPlugin::LoadDrawingSettings(std::optional<std::shared_ptr<CRDFScreen>> 
 	{
 		PLOGE << UNKNOWN_ERROR_MSG;
 		DisplayMessageUnread(UNKNOWN_ERROR_MSG);
+	}
+}
+
+auto CRDFPlugin::LoadDrawingStyle(const std::string& styleName) -> bool
+{
+	// only after everything goes smoothly should it update currentDrawStyle
+
+	auto CancelStyle = [&]() -> void {
+		currentDrawStyle.clear();
+		std::string logMsg = "Drawing style is cancelled";
+		PLOGI << logMsg;
+		DisplayMessageSilent(logMsg);
+		LoadDrawingSettings(std::nullopt);
+		};
+
+	if (styleName.empty()) {
+		CancelStyle();
+		return true;
+	}
+
+	PLOGI << "loading drawing style '" << styleName << "'";
+
+	try {
+		// read & parse json file
+		std::filesystem::path stylePath = dllPath.parent_path() / "RDFStyle.json";
+		PLOGD << "opening style json file: " << stylePath.string();
+		std::ifstream styleFile(stylePath);
+		if (!styleFile.is_open()) {
+			PLOGW << "failed to open json file: " << stylePath.string();
+			return false;
+		}
+		nlohmann::json styleJson;
+		styleFile >> styleJson;
+		styleFile.close();
+
+		// find if top-level keys contains styleName
+		if (styleJson.contains(styleName)) {
+			auto& drawingStyleJson = styleJson.at(styleName);
+
+			// initialize settings
+			// if any value is missing in style json, values from plugin settings file are used
+			std::unique_lock<std::shared_mutex> lock(mtxDrawSettings);
+			currentDrawSettings.reset(new RDFCommon::draw_settings());
+			// load from json
+			for (auto& [key, val] : drawingStyleJson.items()) {
+				PLOGV << "style json: " << key << " = " << val.dump();
+				if (key == SETTING_RGB) {
+					RDFCommon::GetRGB(currentDrawSettings->rdfRGB, val);
+				}
+				else if (key == SETTING_CONCURRENT_RGB) {
+					RDFCommon::GetRGB(currentDrawSettings->rdfConcurRGB, val);
+				}
+				else if (key == SETTING_CIRCLE_RADIUS) {
+					if (val > 0) {
+						currentDrawSettings->circleRadius = val;
+						PLOGV << SETTING_CIRCLE_RADIUS << ": " << currentDrawSettings->circleRadius;
+					}
+				}
+				else if (key == SETTING_THRESHOLD) {
+					currentDrawSettings->circleThreshold = val;
+					PLOGV << SETTING_THRESHOLD << ": " << currentDrawSettings->circleThreshold;
+				}
+				else if (key == SETTING_PRECISION) {
+					if (val >= 0) {
+						currentDrawSettings->circlePrecision = val;
+						PLOGV << SETTING_PRECISION << ": " << currentDrawSettings->circlePrecision;
+					}
+				}
+				else if (key == SETTING_LOW_ALTITUDE) {
+					currentDrawSettings->lowAltitude = val;
+					PLOGV << SETTING_LOW_ALTITUDE << ": " << currentDrawSettings->lowAltitude;
+				}
+				else if (key == SETTING_HIGH_ALTITUDE) {
+					if (val > 0) {
+						currentDrawSettings->highAltitude = val;
+						PLOGV << SETTING_HIGH_ALTITUDE << ": " << currentDrawSettings->highAltitude;
+					}
+				}
+				else if (key == SETTING_LOW_PRECISION) {
+					currentDrawSettings->lowPrecision = val;
+					PLOGV << SETTING_LOW_PRECISION << ": " << currentDrawSettings->lowPrecision;
+				}
+				else if (key == SETTING_HIGH_PRECISION) {
+					if (val >= 0) {
+						currentDrawSettings->highPrecision = val;
+						PLOGV << SETTING_HIGH_PRECISION << ": " << currentDrawSettings->highPrecision;
+					}
+				}
+				else if (key == SETTING_DRAW_CONTROLLERS) {
+					currentDrawSettings->drawController = (bool)val;
+					PLOGV << SETTING_DRAW_CONTROLLERS << ": " << currentDrawSettings->drawController;
+				}
+				else if (key == SETTING_DRAW_REQUIRE_TX) {
+					currentDrawSettings->drawRequireTx = (bool)val;
+					PLOGV << SETTING_DRAW_REQUIRE_TX << ": " << currentDrawSettings->drawRequireTx;
+				}
+			}
+			// store the style name to prevent overwritten by LoadDrawingSettings
+			currentDrawStyle = styleName;
+			std::string logMsg = std::format("Drawing style '{}' loaded successfully.", styleName);
+			PLOGI << logMsg;
+			DisplayMessageSilent(logMsg);
+			return true;
+		}
+		else {
+			std::string logMsg = std::format("Drawing style '{}' not found.", styleName);
+			PLOGW << logMsg;
+			DisplayMessageSilent(logMsg);
+			return false;
+		}
+	}
+	catch (nlohmann::json::exception& e) {
+		PLOGE << "json parsing error: " << e.what();
+		DisplayMessageUnread(std::string("Error: ") + e.what());
+		CancelStyle();
+		return false;
+	}
+	catch (std::exception& e) {
+		PLOGE << "Error: " << e.what();
+		DisplayMessageUnread(std::string("Error: ") + e.what());
+		CancelStyle();
+		return false;
+	}
+	catch (...)
+	{
+		PLOGE << UNKNOWN_ERROR_MSG;
+		DisplayMessageUnread(UNKNOWN_ERROR_MSG);
+		CancelStyle();
+		return false;
 	}
 }
 
@@ -381,7 +519,7 @@ auto CRDFPlugin::GetBridgeMode(void) -> bool
 	return true;
 }
 
-auto CRDFPlugin::GenerateDrawPosition(std::string callsign) -> RDFCommon::draw_position
+auto CRDFPlugin::GenerateDrawPosition(const std::string& callsign) -> RDFCommon::draw_position
 {
 	// return radius=0 for no draw
 	try
@@ -410,33 +548,35 @@ auto CRDFPlugin::GenerateDrawPosition(std::string callsign) -> RDFCommon::draw_p
 		int highPrecision = currentDrawSettings->highPrecision;
 		bool drawController = currentDrawSettings->drawController;
 		dlock.unlock();
-		if (radarTarget.IsValid() && enableDraw) {
-			int alt = radarTarget.GetPosition().GetPressureAltitude();
-			if (alt >= lowAltitude) { // need to draw, see Schematic in LoadSettings
-				EuroScopePlugIn::CPosition pos = radarTarget.GetPosition().GetPosition();
-				double radius = circleRadius;
-				// determines offset
-				double offset = circlePrecision;
-				if (circleThreshold >= 0 && (lowPrecision > 0 || circlePrecision > 0)) {
-					if (highPrecision > 0 && highAltitude > lowAltitude) {
-						offset = (double)lowPrecision + (double)(alt - lowAltitude) * (double)(highPrecision - lowPrecision) / (double)(highAltitude - lowAltitude);
+		if (enableDraw) {
+			if (radarTarget.IsValid()) {
+				int alt = radarTarget.GetPosition().GetPressureAltitude();
+				if (alt >= lowAltitude) { // need to draw, see Schematic in LoadSettings
+					EuroScopePlugIn::CPosition pos = radarTarget.GetPosition().GetPosition();
+					double radius = circleRadius;
+					// determines offset
+					double offset = circlePrecision;
+					if (circleThreshold >= 0 && (lowPrecision > 0 || circlePrecision > 0)) {
+						if (highPrecision > 0 && highAltitude > lowAltitude) {
+							offset = (double)lowPrecision + (double)(alt - lowAltitude) * (double)(highPrecision - lowPrecision) / (double)(highAltitude - lowAltitude);
+						}
+						else {
+							offset = lowPrecision > 0 ? lowPrecision : circlePrecision;
+						}
+						radius = offset;
 					}
-					else {
-						offset = lowPrecision > 0 ? lowPrecision : circlePrecision;
+					if (offset > 0) { // add random offset
+						double distance = abs(disDistance(rdGenerator)) / 3.0 * offset;
+						double bearing = disBearing(rdGenerator);
+						RDFCommon::AddOffset(pos, bearing, distance);
 					}
-					radius = offset;
+					return RDFCommon::draw_position(pos, radius);
 				}
-				if (offset > 0) { // add random offset
-					double distance = abs(disDistance(rdGenerator)) / 3.0 * offset;
-					double bearing = disBearing(rdGenerator);
-					RDFCommon::AddOffset(pos, bearing, distance);
-				}
-				return RDFCommon::draw_position(pos, radius);
 			}
-		}
-		else if (drawController && controller.IsValid()) {
-			auto pos = controller.GetPosition();
-			return RDFCommon::draw_position(pos, circleRadius);
+			else if (drawController && controller.IsValid()) {
+				auto pos = controller.GetPosition();
+				return RDFCommon::draw_position(pos, circleRadius);
+			}
 		}
 	}
 	catch (std::exception const& e)
@@ -456,6 +596,7 @@ auto CRDFPlugin::TrackAudioTransmissionHandler(const nlohmann::json& data, const
 	// pass rxEnd = true for "kRxEnd"
 	std::unique_lock tlock(mtxTransmission);
 	std::string callsign = data.at("callsign");
+	int frequency = FrequencyFromHz(data.at("pFrequencyHz")); // convert to kHz
 	auto it = curTransmission.find(callsign);
 	if (it != curTransmission.end()) {
 		if (rxEnd) {
@@ -463,9 +604,14 @@ auto CRDFPlugin::TrackAudioTransmissionHandler(const nlohmann::json& data, const
 		}
 	}
 	else if (!rxEnd) {
-		auto dp = GenerateDrawPosition(callsign);
-		if (dp.radius > 0) {
-			curTransmission[callsign] = dp;
+		std::shared_lock flock(mtxTxFrequencies);
+		if (!ControllerMyself().IsController() || // logged in as OBS
+			!currentDrawSettings->drawRequireTx || // doesn't require tx
+			curTxFrequencies.contains(frequency)) {
+			auto dp = GenerateDrawPosition(callsign);
+			if (dp.radius > 0) {
+				curTransmission[callsign] = dp;
+			}
 		}
 	}
 	if (curTransmission.size()) {
@@ -584,12 +730,23 @@ auto CRDFPlugin::UpdateChannel(const std::optional<std::string>& callsign, const
 		if (chnl.IsValid()) {
 			ToggleChannel(chnl, channelState->rx, channelState->tx);
 		}
+		// update current transmitting frequency
+		std::unique_lock flock(mtxTxFrequencies);
+		if (channelState->tx) {
+			curTxFrequencies.insert(channelState->frequency);
+		}
+		else {
+			curTxFrequencies.erase(channelState->frequency);
+		}
 	}
 	else { // doesn't specify channel or frequency, deactivate all channels
 		PLOGD << "deactivating all";
 		for (auto chnl = GroundToArChannelSelectFirst(); chnl.IsValid(); chnl = GroundToArChannelSelectNext(chnl)) {
 			ToggleChannel(chnl, false, false); // check for prim/atis will be done inside
 		}
+		// update current transmitting frequency
+		std::unique_lock flock(mtxTxFrequencies);
+		curTxFrequencies.clear();
 	}
 }
 
@@ -703,22 +860,26 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 		std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::toupper); // make upper
 		std::smatch match; // all regular expressions will ignore cases
 		static const std::string COMMAND_BRIDGE = ".RDF BRIDGE ";
+		static const std::string COMMAND_RELOAD = ".RDF RELOAD";
+		static const std::string COMMAND_REFRESH = ".RDF REFRESH";
+		static const std::string COMMAND_STYLE = ".RDF STYLE ";
 
 		// bridge on/off
 		if (cmd.starts_with(COMMAND_BRIDGE)) {
-			auto mode = cmd.substr(COMMAND_BRIDGE.size());
-			if (mode == "ON") {
-				SaveDataToSettings(SETTING_ENABLE_BRIDGE, "Enable bridge", "1");
-				std::string logMsg = "Bridge is enabled! Use .RDF REFRESH command to manually sync with TrackAudio.";
-				PLOGI << logMsg;
-				DisplayMessageSilent(logMsg);
-				return true;
-			}
-			else if (mode == "OFF") {
-				SaveDataToSettings(SETTING_ENABLE_BRIDGE, "Enable bridge", "0");
-				std::string logMsg = "Bridge is disable! Future station updates won't sync with channels.";
-				PLOGI << logMsg;
-				DisplayMessageSilent(logMsg);
+			bool opt;
+			if (RDFCommon::GetSettingOnOff(opt, cmd.substr(COMMAND_BRIDGE.size()))) {
+				if (opt) {
+					SaveDataToSettings(SETTING_ENABLE_BRIDGE, "Enable bridge", "1");
+					std::string logMsg = "Bridge is enabled! Use .RDF REFRESH command to manually sync with TrackAudio.";
+					PLOGI << logMsg;
+					DisplayMessageSilent(logMsg);
+				}
+				else {
+					SaveDataToSettings(SETTING_ENABLE_BRIDGE, "Enable bridge", "0");
+					std::string logMsg = "Bridge is disable! Future station updates won't sync with channels.";
+					PLOGI << logMsg;
+					DisplayMessageSilent(logMsg);
+				}
 				return true;
 			}
 			else {
@@ -726,12 +887,12 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 			}
 		}
 		// reload
-		if (cmd == ".RDF RELOAD") {
+		if (cmd == COMMAND_RELOAD) {
 			LoadTrackAudioSettings();
 			return true;
 		}
 		// refresh
-		if (cmd == ".RDF REFRESH") {
+		if (cmd == COMMAND_REFRESH) {
 			PLOGD << "refreshing RDF records and station states";
 			std::unique_lock tlock(mtxTransmission);
 			curTransmission.clear();
@@ -744,10 +905,18 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 			PLOGD << "kGetStationStates is sent via WS";
 			return true;
 		}
+		// style
+		if (cmd.starts_with(COMMAND_STYLE)) {
+			// use original command line to address upper/lower cases in style name
+			std::string styleName = std::string(sCommandLine).substr(COMMAND_STYLE.size());
+			std::string styleNameUpper = cmd.substr(COMMAND_STYLE.size());
+			bool useStyle = true;
+			RDFCommon::GetSettingOnOff(useStyle, styleNameUpper); // determine whether to cancel style
+			return LoadDrawingStyle(useStyle ? styleName : "");
+		}
 	}
 	catch (std::exception const& e)
 	{
-
 		PLOGE << "Error: " << e.what();
 		DisplayMessageUnread(std::string("Error: ") + e.what());
 	}

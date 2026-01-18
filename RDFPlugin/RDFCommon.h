@@ -7,9 +7,9 @@
 
 // Plugin info
 constexpr auto MY_PLUGIN_NAME = "RDF Plugin for Euroscope";
-constexpr auto MY_PLUGIN_VERSION = "1.4.2";
+constexpr auto MY_PLUGIN_VERSION = "1.4.3b";
 constexpr auto MY_PLUGIN_DEVELOPER = "Kingfu Chan";
-constexpr auto MY_PLUGIN_COPYRIGHT = "GPLv3 License, Copyright (c) 2025 Kingfu Chan";
+constexpr auto MY_PLUGIN_COPYRIGHT = "GPLv3 License, Copyright (C) 2025 Kingfu Chan";
 // TrackAudio URLs and parameters
 constexpr auto TRACKAUDIO_PARAM_VERSION = "/*";
 constexpr auto TRACKAUDIO_PARAM_WS = "/ws";
@@ -31,6 +31,7 @@ constexpr auto SETTING_HIGH_ALTITUDE = "HighAltitude";
 constexpr auto SETTING_LOW_PRECISION = "LowPrecision";
 constexpr auto SETTING_HIGH_PRECISION = "HighPrecision";
 constexpr auto SETTING_DRAW_CONTROLLERS = "DrawControllers";
+constexpr auto SETTING_DRAW_REQUIRE_TX = "DrawRequireTx";
 // Tag item type
 constexpr auto TAG_ITEM_TYPE_RDF_STATE = 1001; // RDF state
 
@@ -51,6 +52,7 @@ namespace RDFCommon {
 
 	// General functions
 	auto GetRGB(COLORREF& color, const std::string& settingValue) -> bool; // return true if success
+	auto GetSettingOnOff(bool& on, const std::string& settingValue) -> bool; // return true if success
 	auto AddOffset(EuroScopePlugIn::CPosition& position, const double& heading, const double& distance) -> void;
 
 	// Draw position
@@ -84,6 +86,7 @@ namespace RDFCommon {
 		int lowPrecision;
 		int highPrecision;
 		bool drawController;
+		bool drawRequireTx;
 
 		_draw_settings(void) {
 			enabled = true;
@@ -97,14 +100,9 @@ namespace RDFCommon {
 			highAltitude = 0; // Default: 0 (feet)
 			highPrecision = 0; // Default: 0 (nautical miles), range: [0, +inf)
 			drawController = false;
+			drawRequireTx = false;
 		}
 	} draw_settings;
-
-	// Frequency & channel state
-	typedef struct _freq_state {
-		std::optional<std::string> callsign; // can be empty
-		bool tx = false;
-	} freq_state;
 
 	typedef struct _es_chnl_state {
 		bool isPrim;
