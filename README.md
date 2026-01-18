@@ -31,9 +31,9 @@ Do the same work as [*afv-euroscope-bridge*](https://github.com/AndyTWF/afv-euro
 ## Configurations
 
 > [!NOTE]
-> All command line functions are case-insensitive.
+> All command line functions are case-insensitive, except `[Style Name]` in `.RDF STYLE [Style Name]`.
 
-### General
+### General Plugin Settings
 
 This table shows general configurable items that would affect the plugin globally.
 
@@ -65,7 +65,7 @@ This table shows general configurable items that would affect the plugin globall
 >
 > To change log level, the only way is to unload & reload RDFPlugin.dll inside EuroScope plugin setup dialog.
 
-### Drawing Parameters
+## Drawing Parameters
 
 This table shows all RDF drawing parameters. All entries allow per-ASR configuration.
 
@@ -90,8 +90,12 @@ This table shows all RDF drawing parameters. All entries allow per-ASR configura
 + **RGB, ConcurrentTransmissionRGB** define drawing colors when single or multiple stations are transmitting at the same time.
 + **Radius, Threshold, Precision, LowAltitude, HighAltitude, LowPrecision, HighPrecision** see [Random Offset Schematic](#random-offset-schematic) below.
 
-> [!NOTE]
-> When an ASR is opened, the plugin will use the configurations in the sequence of **ASR > plugin settings file > default value**.
+> [!TIP]
+> For all boolean parameters or settings, both 0/1 and off/on are accepted in command line functions.
+
+### Drawing Parameters Schematic
+
+<img src="docs/drawing-parameters-schematic.png" style="width: 50%;">
 
 ### Drawing Parameters Command Line Functions
 
@@ -107,15 +111,26 @@ This table shows all RDF drawing parameters. All entries allow per-ASR configura
 + Settings will be saved to ASR file.
 + E.g. `.RDF ASR DRAW 0` will disable RDF in current ASR.
 
+`.RDF STYLE [Style Name]`
+
++ Designed for pre-defined scenarios and real-time switching.
++ Requires an **RDFStyle.json** file next to DLL file. [JSON format](#example---style)
++ `[Style Name]` is the name of the style. Must be exact match (case-sensitive).
++ STYLE settings will not be saved. Manual reload is required after restarting EuroScope.
+
 ### Random Offset Schematic
 
-For transmitting pilots:
-![random-offset-schematic-pilots](docs/random-offset-schematic-pilots.png)
+**For transmitting pilots:**
 
-For transmitting controllers:
-![random-offset-schematic-controllers](docs/random-offset-schematic-controllers.png)
+<img src="docs/random-offset-schematic-pilots.png" style="width: 50%;">
 
-### Samples - Plugin Settings File
+**For transmitting controllers:**
+
+<img src="docs/random-offset-schematic-controllers.png" style="width: 35%;">
+
+## Configuration Examples
+
+### Example - Plugin Settings File
 
 ```text
 RDF Plugin for Euroscope:LogLevel:none
@@ -155,7 +170,7 @@ RDF Plugin for Euroscope:HighAltitude:41100
 RDF Plugin for Euroscope:HighPrecision:25
 ```
 
-### Samples - Per-ASR Drawing Parameters
+### Example - Per-ASR Drawing Parameters
 
 ```text
 ; Disables RDF in this ASR
@@ -184,6 +199,45 @@ PLUGIN:RDF Plugin for Euroscope:HighAltitude:0
 PLUGIN:RDF Plugin for Euroscope:LowPrecision:0
 PLUGIN:RDF Plugin for Euroscope:HighPrecision:0
 ```
+
+### Example - STYLE
+
+> [!NOTE]
+> Any items not defined in JSON file will be treated as plugin default.
+
+```json
+{
+  "LANGEN": {
+    "Radius": 20,
+    "Precision": 0,
+    "Threshold": 999999,
+    "LowAltitude": 0,
+    "HighAltitude": 0,
+    "LowPrecision": 10,
+    "HighPrecision": 20,
+    "RGB": "114:150:102",
+    "ConcurrentTransmissionRGB": "114:150:102",
+    "DrawControllers": false,
+    "DrawRequireTx": false
+  },
+  "RING": {
+    "Radius": 20,
+    "Precision": 0,
+    "Threshold": -1,
+    "LowAltitude": 0,
+    "HighAltitude": 0,
+    "LowPrecision": 0,
+    "HighPrecision": 0,
+    "RGB": "114:150:102",
+    "ConcurrentTransmissionRGB": "114:150:102",
+    "DrawControllers": false,
+    "DrawRequireTx": false
+  }
+}
+```
+
+> [!TIP]
+> In the above example, `LANGEN` and `RING` are style names.
 
 ## Known Issues
 
