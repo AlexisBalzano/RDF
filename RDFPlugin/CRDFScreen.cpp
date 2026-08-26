@@ -54,13 +54,18 @@ auto CRDFScreen::OnRefresh(HDC hDC, int Phase) -> void
 		HPEN hPen = CreatePen(PS_SOLID, 1, penColor);
 		HGDIOBJ oldPen = SelectObject(hDC, hPen);
 
+		POINT center = { (GetRadarArea().right - GetRadarArea().left) / 2, (GetRadarArea().bottom - GetRadarArea().top) / 2 };
+		if (auto myself = GetPlugIn()->ControllerMyself(); myself.IsValid()) {
+			center = ConvertCoordFromPositionToPixel(myself.GetPosition()); // Use vis position as Geographic center
+		}
+
 		for (auto& callsignPos : drawPosition) {
 			// Always draw line to edge of screen even if plane is inside radar area to indicate general direction
 			POINT oldPoint;
-			POINT center = { (GetRadarArea().right - GetRadarArea().left) / 2, (GetRadarArea().bottom - GetRadarArea().top) / 2 };
 			POINT pPos = ConvertCoordFromPositionToPixel(callsignPos.second.position);
 			RDFCommon::ExtrapolateToEdgeOfScreen(GetRadarArea(), center, pPos);
-			MoveToEx(hDC, center.x, center.y, &oldPoint); // center of screen
+			
+			MoveToEx(hDC, center.x, center.y, &oldPoint); // center of screen or visibility
 			LineTo(hDC, pPos.x, pPos.y); // aircraft position + offset + extrapolation to end of screen
 			MoveToEx(hDC, oldPoint.x, oldPoint.y, NULL);
 		}

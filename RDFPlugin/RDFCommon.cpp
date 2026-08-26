@@ -63,40 +63,21 @@ auto RDFCommon::AddOffset(EuroScopePlugIn::CPosition& position, const double& he
 // Extrapolate a point to the edge of the radar screen, given the radar area and the center point
 auto RDFCommon::ExtrapolateToEdgeOfScreen(const RECT& radarArea, const POINT& center, POINT& screenPos) -> void
 {
-	int rise = screenPos.y - center.y;
-	int run = screenPos.x - center.x;
-
-	int xedge = radarArea.left;
-	int yedge = radarArea.bottom;
-	int xsteps = 0;
-	int ysteps = 0;
-
-	if (run > 0) {
-		xedge = radarArea.right;
-		xsteps = ((xedge - center.x) / run);
-		if (xsteps < 0) xsteps = -xsteps;
+	const double run = screenPos.x - center.x;
+	const double rise = screenPos.y - center.y;
+	if (run == 0.0 && rise == 0.0) {
+		return; // already at center, no direction to extrapolate
 	}
 
-	if (rise > 0) {
-		yedge = radarArea.top;
-		ysteps = ((yedge - center.y) / rise);
-		if (ysteps < 0) ysteps = -ysteps;
-	}
+	// Scale factor along (run, rise) that lands on each edge; the nearer crossing wins.
+	double scaleX = 0.0, scaleY = 0.0;
+	if (run > 0.0) scaleX = (radarArea.right - center.x) / run;
+	else if (run < 0.0) scaleX = (radarArea.left - center.x) / run;
+	if (rise > 0.0) scaleY = (radarArea.bottom - center.y) / rise;
+	else if (rise < 0.0) scaleY = (radarArea.top - center.y) / rise;
 
-	if (xsteps == 0 && ysteps == 0) {
-		return; // invalid coordinates or already at center
-	}
+	const double scale = (scaleX > 0.0 && scaleY > 0.0) ? min(scaleX, scaleY) : max(scaleX, scaleY);
 
-
-	int steps = xsteps;
-
-	if (ysteps > 0 && (ysteps < xsteps || xsteps == 0)) {
-		steps = ysteps;
-	}
-
-	xedge = center.x + (run * steps);
-	yedge = center.y + (rise * steps);
-
-	screenPos.x = xedge;
-	screenPos.y = yedge;
+	screenPos.x = center.x + (LONG)lround(run * scale);
+	screenPos.y = center.y + (LONG)lround(rise * scale);
 }
