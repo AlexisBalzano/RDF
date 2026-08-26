@@ -55,48 +55,13 @@ auto CRDFScreen::OnRefresh(HDC hDC, int Phase) -> void
 		HGDIOBJ oldPen = SelectObject(hDC, hPen);
 
 		for (auto& callsignPos : drawPosition) {
-			POINT pPos = ConvertCoordFromPositionToPixel(callsignPos.second.position);
-			if (PlaneIsVisible(pPos, GetRadarArea())) {
-				double drawR = callsignPos.second.radius;
-				// deal with drawing radius when threshold enabled
-				if (params.circleThreshold >= 0) {
-					EuroScopePlugIn::CPosition posLD, posRU;
-					GetDisplayArea(&posLD, &posRU);
-					POINT pLD = ConvertCoordFromPositionToPixel(posLD);
-					POINT pRU = ConvertCoordFromPositionToPixel(posRU);
-					double dst = sqrt(pow(pRU.x - pLD.x, 2) + pow(pRU.y - pLD.y, 2));
-					drawR = drawR * dst / posLD.DistanceTo(posRU);
-				}
-				if (drawR >= (double)params.circleThreshold) {
-					// draw circle
-					if (params.circleThreshold >= 0) {
-						// using position as boundary xy
-						EuroScopePlugIn::CPosition pl = callsignPos.second.position;
-						RDFCommon::AddOffset(pl, 270, callsignPos.second.radius);
-						EuroScopePlugIn::CPosition pt = callsignPos.second.position;
-						RDFCommon::AddOffset(pt, 0, callsignPos.second.radius);
-						EuroScopePlugIn::CPosition pr = callsignPos.second.position;
-						RDFCommon::AddOffset(pr, 90, callsignPos.second.radius);
-						EuroScopePlugIn::CPosition pb = callsignPos.second.position;
-						RDFCommon::AddOffset(pb, 180, callsignPos.second.radius);
-						Ellipse(hDC,
-							ConvertCoordFromPositionToPixel(pl).x,
-							ConvertCoordFromPositionToPixel(pt).y,
-							ConvertCoordFromPositionToPixel(pr).x,
-							ConvertCoordFromPositionToPixel(pb).y
-						);
-					}
-					else {
-						// using pixel as boundary xy
-						Ellipse(hDC, pPos.x - (int)round(drawR), pPos.y - (int)round(drawR), pPos.x + (int)round(drawR), pPos.y + (int)round(drawR));
-					}
-					continue;
-				}
-			}
-			// draw line
+			// Always draw line to edge of screen even if plane is inside radar area to indicate general direction
 			POINT oldPoint;
-			MoveToEx(hDC, (GetRadarArea().right - GetRadarArea().left) / 2, (GetRadarArea().bottom - GetRadarArea().top) / 2, &oldPoint);
-			LineTo(hDC, pPos.x, pPos.y);
+			POINT center = { (GetRadarArea().right - GetRadarArea().left) / 2, (GetRadarArea().bottom - GetRadarArea().top) / 2 };
+			POINT pPos = ConvertCoordFromPositionToPixel(callsignPos.second.position);
+			RDFCommon::ExtrapolateToEdgeOfScreen(GetRadarArea(), center, pPos);
+			MoveToEx(hDC, center.x, center.y, &oldPoint); // center of screen
+			LineTo(hDC, pPos.x, pPos.y); // aircraft position + offset + extrapolation to end of screen
 			MoveToEx(hDC, oldPoint.x, oldPoint.y, NULL);
 		}
 

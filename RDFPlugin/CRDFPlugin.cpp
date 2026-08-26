@@ -777,7 +777,7 @@ auto CRDFPlugin::ToggleChannel(EuroScopePlugIn::CGrountToAirChannel Channel, con
 auto CRDFPlugin::GetDrawStations(void) -> RDFCommon::callsign_position
 {
 	std::shared_lock tlock(mtxTransmission);
-	return curTransmission.empty() && GetAsyncKeyState(VK_MBUTTON) ? preTransmission : curTransmission;
+	return curTransmission.empty() && GetAsyncKeyState(PrevTransButton) ? preTransmission : curTransmission;
 }
 
 auto CRDFPlugin::TrackAudioMessageHandler(const ix::WebSocketMessagePtr& msg) -> void

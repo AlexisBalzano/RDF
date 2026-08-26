@@ -13,6 +13,8 @@ class CRDFPlugin : public EuroScopePlugIn::CPlugIn, public std::enable_shared_fr
 private:
 	friend class CRDFScreen;
 
+	static constexpr int PrevTransButton = VK_XBUTTON2; //MOUSE5 button by default
+
 	// directory
 	std::filesystem::path dllPath;
 

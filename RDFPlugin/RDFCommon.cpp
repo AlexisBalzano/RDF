@@ -59,3 +59,44 @@ auto RDFCommon::AddOffset(EuroScopePlugIn::CPosition& position, const double& he
 	position.m_Latitude = GEOM_DEG_FROM_RAD(fi2);
 	position.m_Longitude = GEOM_DEG_FROM_RAD(lambda2);
 }
+
+// Extrapolate a point to the edge of the radar screen, given the radar area and the center point
+auto RDFCommon::ExtrapolateToEdgeOfScreen(const RECT& radarArea, const POINT& center, POINT& screenPos) -> void
+{
+	int rise = screenPos.y - center.y;
+	int run = screenPos.x - center.x;
+
+	int xedge = radarArea.left;
+	int yedge = radarArea.bottom;
+	int xsteps = 0;
+	int ysteps = 0;
+
+	if (run > 0) {
+		xedge = radarArea.right;
+		xsteps = ((xedge - center.x) / run);
+		if (xsteps < 0) xsteps = -xsteps;
+	}
+
+	if (rise > 0) {
+		yedge = radarArea.top;
+		ysteps = ((yedge - center.y) / rise);
+		if (ysteps < 0) ysteps = -ysteps;
+	}
+
+	if (xsteps == 0 && ysteps == 0) {
+		return; // invalid coordinates or already at center
+	}
+
+
+	int steps = xsteps;
+
+	if (ysteps > 0 && (ysteps < xsteps || xsteps == 0)) {
+		steps = ysteps;
+	}
+
+	xedge = center.x + (run * steps);
+	yedge = center.y + (rise * steps);
+
+	screenPos.x = xedge;
+	screenPos.y = yedge;
+}

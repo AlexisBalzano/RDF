@@ -7,8 +7,8 @@
 
 // Plugin info
 constexpr auto MY_PLUGIN_NAME = "RDF Plugin for Euroscope";
-constexpr auto MY_PLUGIN_VERSION = "1.4.3b";
-constexpr auto MY_PLUGIN_DEVELOPER = "Kingfu Chan";
+constexpr auto MY_PLUGIN_VERSION = "1.4.4";
+constexpr auto MY_PLUGIN_DEVELOPER = "Kingfu Chan, French vACC";
 constexpr auto MY_PLUGIN_COPYRIGHT = "GPLv3 License, Copyright (C) 2025 Kingfu Chan";
 // TrackAudio URLs and parameters
 constexpr auto TRACKAUDIO_PARAM_VERSION = "/*";
@@ -54,6 +54,7 @@ namespace RDFCommon {
 	auto GetRGB(COLORREF& color, const std::string& settingValue) -> bool; // return true if success
 	auto GetSettingOnOff(bool& on, const std::string& settingValue) -> bool; // return true if success
 	auto AddOffset(EuroScopePlugIn::CPosition& position, const double& heading, const double& distance) -> void;
+	auto ExtrapolateToEdgeOfScreen(const RECT& radarArea, const POINT& center, POINT& screenPos) -> void;
 
 	// Draw position
 	typedef struct _draw_position {
