@@ -20,6 +20,12 @@ LRESULT CALLBACK HiddenWindowRDF(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 		}
 		return TRUE;
 	}
+	case WM_RDF_TRACKAUDIO_EVENTS: {
+		if (rdfPlugin != nullptr) {
+			rdfPlugin->HiddenWndProcessTrackAudioEvents();
+		}
+		return 0;
+	}
 	}
 
 	return DefWindowProc(hwnd, msg, wParam, lParam);

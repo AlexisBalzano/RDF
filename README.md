@@ -69,6 +69,7 @@ This table shows all RDF drawing parameters. All entries allow per-ASR configura
 | Entry Name                | Command Line Keyword |    Range    | Default Value |
 | ------------------------- | -------------------: | :---------: | :-----------: |
 | EnableDraw                |               `DRAW` |   0 or 1    |       1       |
+| LineOnly                  |           `LINEONLY` |   0 or 1    |       0       |
 | DrawRequireTx             |                 `TX` |   0 or 1    |       0       |
 | DrawControllers           |         `CONTROLLER` |   0 or 1    |       0       |
 | RGB                       |                `RGB` | RRR:GGG:BBB |  255:255:255  |
@@ -82,6 +83,7 @@ This table shows all RDF drawing parameters. All entries allow per-ASR configura
 | HighPrecision             |   `PRECISION H_____` |  [0, +inf)  |       0       |
 
 + **EnableDraw** controls RDF drawing functionality. 0 means OFF.
++ **LineOnly** controls whether only lines should be drawn instead of circles even if aicraft in scope. 0 means OFF.
 + **DrawRequireTx** controls whether transmitting stations should only be drawn on active tx frequencies. 0 means OFF. (Not active in Observer Mode, Only compatible with TrackAudio)
 + **DrawControllers** controls whether transmitting controllers should be drawn as well. 0 means OFF.
 + **RGB, ConcurrentTransmissionRGB** define drawing colors when single or multiple stations are transmitting at the same time.

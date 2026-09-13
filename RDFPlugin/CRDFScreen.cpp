@@ -60,9 +60,46 @@ auto CRDFScreen::OnRefresh(HDC hDC, int Phase) -> void
 		}
 
 		for (auto& callsignPos : drawPosition) {
-			// Always draw line to edge of screen even if plane is inside radar area to indicate general direction
-			POINT oldPoint;
 			POINT pPos = ConvertCoordFromPositionToPixel(callsignPos.second.position);
+			if (PlaneIsVisible(pPos, GetRadarArea()) && !params.lineOnly) {
+				double drawR = callsignPos.second.radius;
+				// deal with drawing radius when threshold enabled
+				if (params.circleThreshold >= 0) {
+					EuroScopePlugIn::CPosition posLD, posRU;
+					GetDisplayArea(&posLD, &posRU);
+					POINT pLD = ConvertCoordFromPositionToPixel(posLD);
+					POINT pRU = ConvertCoordFromPositionToPixel(posRU);
+					double dst = sqrt(pow(pRU.x - pLD.x, 2) + pow(pRU.y - pLD.y, 2));
+					drawR = drawR * dst / posLD.DistanceTo(posRU);
+				}
+				if (drawR >= (double)params.circleThreshold) {
+					// draw circle
+					if (params.circleThreshold >= 0) {
+						// using position as boundary xy
+						EuroScopePlugIn::CPosition pl = callsignPos.second.position;
+						RDFCommon::AddOffset(pl, 270, callsignPos.second.radius);
+						EuroScopePlugIn::CPosition pt = callsignPos.second.position;
+						RDFCommon::AddOffset(pt, 0, callsignPos.second.radius);
+						EuroScopePlugIn::CPosition pr = callsignPos.second.position;
+						RDFCommon::AddOffset(pr, 90, callsignPos.second.radius);
+						EuroScopePlugIn::CPosition pb = callsignPos.second.position;
+						RDFCommon::AddOffset(pb, 180, callsignPos.second.radius);
+						Ellipse(hDC,
+							ConvertCoordFromPositionToPixel(pl).x,
+							ConvertCoordFromPositionToPixel(pt).y,
+							ConvertCoordFromPositionToPixel(pr).x,
+							ConvertCoordFromPositionToPixel(pb).y
+						);
+					}
+					else {
+						// using pixel as boundary xy
+						Ellipse(hDC, pPos.x - (int)round(drawR), pPos.y - (int)round(drawR), pPos.x + (int)round(drawR), pPos.y + (int)round(drawR));
+					}
+					continue;
+				}
+			}
+			// Draw lines
+			POINT oldPoint;
 			RDFCommon::ExtrapolateToEdgeOfScreen(GetRadarArea(), center, pPos);
 			
 			MoveToEx(hDC, center.x, center.y, &oldPoint); // center of screen or visibility
@@ -171,6 +208,13 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 			bool opt;
 			if (RDFCommon::GetSettingOnOff(opt, cmd.substr(5))) {
 				SaveDrawSetting(SETTING_ENABLE_DRAW, "Enable RDF draw", opt ? "1" : "0", asr);
+				return true;
+			}
+		}
+		if (cmd.starts_with("LINEONLY ")) {
+			bool opt;
+			if (RDFCommon::GetSettingOnOff(opt, cmd.substr(9))) {
+				SaveDrawSetting(SETTING_LINE_ONLY, "Line Only", opt ? "1" : "0", asr);
 				return true;
 			}
 		}

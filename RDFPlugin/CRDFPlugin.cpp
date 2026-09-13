@@ -193,6 +193,10 @@ auto CRDFPlugin::HiddenWndProcessAFVMessage(const std::string& message) -> void
 
 auto CRDFPlugin::LoadTrackAudioSettings(void) -> void
 {
+	// stop TrackAudio WebSocket before changing its address, which its thread reads when connecting
+	PLOGD << "stopping TrackAudio WebSocket";
+	socketTrackAudio.stop();
+
 	// get TrackAudio config
 	PLOGD << "loading TrackAudio settings";
 	addressTrackAudio = "127.0.0.1:49080";
@@ -213,10 +217,6 @@ auto CRDFPlugin::LoadTrackAudioSettings(void) -> void
 		PLOGE << UNKNOWN_ERROR_MSG;
 		DisplayMessageUnread(UNKNOWN_ERROR_MSG);
 	}
-
-	// stop TrackAudio WebSocket
-	PLOGD << "stopping TrackAudio WebSocket";
-	socketTrackAudio.stop();
 
 	// clears records
 	PLOGD << "clearing records";
@@ -353,6 +353,12 @@ auto CRDFPlugin::LoadDrawingSettings(const std::optional<std::shared_ptr<CRDFScr
 		{
 			currentDrawSettings->drawRequireTx = (bool)std::stoi(cstrDrawRequireTx);
 			PLOGV << SETTING_DRAW_REQUIRE_TX << ": " << currentDrawSettings->drawRequireTx;
+		}
+		auto cstrLineOnly = GetSetting(SETTING_LINE_ONLY);
+		if (cstrLineOnly.size())
+		{
+			currentDrawSettings->lineOnly = (bool)std::stoi(cstrLineOnly);
+			PLOGV << SETTING_LINE_ONLY << ": " << currentDrawSettings->lineOnly;
 		}
 		PLOGD << "drawing settings loaded";
 	}
@@ -782,24 +788,11 @@ auto CRDFPlugin::GetDrawStations(void) -> RDFCommon::callsign_position
 
 auto CRDFPlugin::TrackAudioMessageHandler(const ix::WebSocketMessagePtr& msg) -> void
 {
+	// runs on the IXWebSocket thread: nothing here may call the EuroScope API
 	try {
 		if (msg->type == ix::WebSocketMessageType::Message) {
 			PLOGD << "WS MSG: " << msg->str;
-			auto data = nlohmann::json::parse(msg->str);
-			std::string msgType = data["type"];
-			nlohmann::json msgValue = data["value"];
-			if (msgType == "kRxBegin") {
-				TrackAudioTransmissionHandler(msgValue, false);
-			}
-			else if (msgType == "kRxEnd") {
-				TrackAudioTransmissionHandler(msgValue, true);
-			}
-			else if (msgType == "kStationStateUpdate") { // only handle with sync on
-				TrackAudioStationStateUpdateHandler(msgValue);
-			}
-			else if (msgType == "kStationStates") {// only handle with sync on
-				TrackAudioStationStatesHandler(msgValue);
-			}
+			QueueTrackAudioEvent(TrackAudioEventType::Message, msg->str);
 		}
 		else if (msg->type == ix::WebSocketMessageType::Open) {
 			// check for TrackAudio presense
@@ -810,7 +803,7 @@ auto CRDFPlugin::TrackAudioMessageHandler(const ix::WebSocketMessagePtr& msg) ->
 				if (res->status == 200 && res->body.size()) {
 					auto logMsg = std::format("Connected to {} on {}.", res->body, addressTrackAudio);
 					PLOGI << logMsg;
-					DisplayMessageSilent(logMsg);
+					QueueTrackAudioEvent(TrackAudioEventType::DisplaySilent, logMsg);
 				}
 			}
 		}
@@ -818,13 +811,13 @@ auto CRDFPlugin::TrackAudioMessageHandler(const ix::WebSocketMessagePtr& msg) ->
 			auto logMsg = std::format("WS ERROR! reason: {}, #retries: {}, wait_time: {}, http_status: {}",
 				msg->errorInfo.reason, (int)msg->errorInfo.retries, msg->errorInfo.wait_time, msg->errorInfo.http_status);
 			PLOGW << logMsg;
-			DisplayMessageDebug(logMsg);
+			QueueTrackAudioEvent(TrackAudioEventType::DisplayDebug, logMsg);
 		}
 		else if (msg->type == ix::WebSocketMessageType::Close) {
 			auto logMsg = std::format("WS CLOSE! code: {}, reason: {}", (int)msg->closeInfo.code, msg->closeInfo.reason);
 			PLOGI << logMsg;
-			DisplayMessageDebug(logMsg);
-			DisplayMessageUnread("TrackAudio WebSocket disconnected!");
+			QueueTrackAudioEvent(TrackAudioEventType::DisplayDebug, logMsg);
+			QueueTrackAudioEvent(TrackAudioEventType::DisplayUnread, "TrackAudio WebSocket disconnected!");
 		}
 	}
 	catch (std::exception const& e) {
@@ -832,6 +825,72 @@ auto CRDFPlugin::TrackAudioMessageHandler(const ix::WebSocketMessagePtr& msg) ->
 	}
 	catch (...) {
 		PLOGE << UNKNOWN_ERROR_MSG;
+	}
+}
+
+auto CRDFPlugin::QueueTrackAudioEvent(TrackAudioEventType type, std::string payload) -> void
+{
+	// called from the IXWebSocket thread
+	if (hiddenWindowRDF == nullptr) {
+		return; // nothing on EuroScope's thread would ever drain the queue
+	}
+	{
+		std::unique_lock elock(mtxTrackAudioEvents);
+		if (trackAudioEvents.size() >= MaxQueuedTrackAudioEvents) {
+			trackAudioEvents.pop(); // EuroScope stalled, keep the most recent events
+		}
+		trackAudioEvents.emplace(type, std::move(payload));
+	}
+	PostMessage(hiddenWindowRDF, WM_RDF_TRACKAUDIO_EVENTS, 0, 0);
+}
+
+auto CRDFPlugin::HiddenWndProcessTrackAudioEvents(void) -> void
+{
+	// EuroScope's thread. Everything queued so far is handled at once, so later wake-ups may find nothing left.
+	std::queue<std::pair<TrackAudioEventType, std::string>> events;
+	{
+		std::unique_lock elock(mtxTrackAudioEvents);
+		events.swap(trackAudioEvents);
+	}
+	for (; !events.empty(); events.pop()) {
+		const auto& [type, payload] = events.front();
+		try {
+			switch (type) {
+			case TrackAudioEventType::Message: {
+				auto data = nlohmann::json::parse(payload);
+				std::string msgType = data["type"];
+				nlohmann::json msgValue = data["value"];
+				if (msgType == "kRxBegin") {
+					TrackAudioTransmissionHandler(msgValue, false);
+				}
+				else if (msgType == "kRxEnd") {
+					TrackAudioTransmissionHandler(msgValue, true);
+				}
+				else if (msgType == "kStationStateUpdate") { // only handle with sync on
+					TrackAudioStationStateUpdateHandler(msgValue);
+				}
+				else if (msgType == "kStationStates") {// only handle with sync on
+					TrackAudioStationStatesHandler(msgValue);
+				}
+				break;
+			}
+			case TrackAudioEventType::DisplaySilent:
+				DisplayMessageSilent(payload);
+				break;
+			case TrackAudioEventType::DisplayDebug:
+				DisplayMessageDebug(payload);
+				break;
+			case TrackAudioEventType::DisplayUnread:
+				DisplayMessageUnread(payload);
+				break;
+			}
+		}
+		catch (std::exception const& e) {
+			PLOGE << e.what();
+		}
+		catch (...) {
+			PLOGE << UNKNOWN_ERROR_MSG;
+		}
 	}
 }
 

@@ -7,7 +7,7 @@
 
 // Plugin info
 constexpr auto MY_PLUGIN_NAME = "RDF Plugin for Euroscope";
-constexpr auto MY_PLUGIN_VERSION = "1.4.4";
+constexpr auto MY_PLUGIN_VERSION = "1.4.5";
 constexpr auto MY_PLUGIN_DEVELOPER = "Kingfu Chan, French vACC";
 constexpr auto MY_PLUGIN_COPYRIGHT = "GPLv3 License, Copyright (C) 2025 Kingfu Chan";
 // TrackAudio URLs and parameters
@@ -32,6 +32,8 @@ constexpr auto SETTING_LOW_PRECISION = "LowPrecision";
 constexpr auto SETTING_HIGH_PRECISION = "HighPrecision";
 constexpr auto SETTING_DRAW_CONTROLLERS = "DrawControllers";
 constexpr auto SETTING_DRAW_REQUIRE_TX = "DrawRequireTx";
+constexpr auto SETTING_LINE_ONLY = "LineOnly";
+
 // Tag item type
 constexpr auto TAG_ITEM_TYPE_RDF_STATE = 1001; // RDF state
 
@@ -88,6 +90,7 @@ namespace RDFCommon {
 		int highPrecision;
 		bool drawController;
 		bool drawRequireTx;
+		bool lineOnly; // if true, only draw line to edge of screen, no circle
 
 		_draw_settings(void) {
 			enabled = true;
@@ -102,6 +105,7 @@ namespace RDFCommon {
 			highPrecision = 0; // Default: 0 (nautical miles), range: [0, +inf)
 			drawController = false;
 			drawRequireTx = false;
+			lineOnly = false;
 		}
 	} draw_settings;
 

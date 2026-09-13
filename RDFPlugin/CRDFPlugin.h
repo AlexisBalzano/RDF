@@ -35,6 +35,13 @@ private:
 	std::string addressTrackAudio;
 	ix::WebSocket socketTrackAudio;
 	auto TrackAudioMessageHandler(const ix::WebSocketMessagePtr& msg) -> void;
+	// IXWebSocket calls TrackAudioMessageHandler on its own thread and the EuroScope API is not thread safe,
+	// so the handler only queues events and HiddenWndProcessTrackAudioEvents handles them on EuroScope's thread
+	enum class TrackAudioEventType { Message, DisplaySilent, DisplayDebug, DisplayUnread };
+	static constexpr size_t MaxQueuedTrackAudioEvents = 256;
+	std::mutex mtxTrackAudioEvents;
+	std::queue<std::pair<TrackAudioEventType, std::string>> trackAudioEvents;
+	auto QueueTrackAudioEvent(TrackAudioEventType type, std::string payload) -> void;
 
 	// AFV standalone client controls
 	HWND hiddenWindowRDF = NULL;
@@ -98,6 +105,7 @@ public:
 	auto GetDrawStations(void) -> RDFCommon::callsign_position;
 	auto HiddenWndProcessRDFMessage(const std::string& message) -> void;
 	auto HiddenWndProcessAFVMessage(const std::string& message) -> void;
+	auto HiddenWndProcessTrackAudioEvents(void) -> void;
 	virtual auto OnRadarScreenCreated(const char* sDisplayName, bool NeedRadarContent, bool GeoReferenced, bool CanBeSaved, bool CanBeCreated) -> EuroScopePlugIn::CRadarScreen*;
 	virtual auto OnCompileCommand(const char* sCommandLine) -> bool;
 	virtual auto OnGetTagItem(EuroScopePlugIn::CFlightPlan FlightPlan, EuroScopePlugIn::CRadarTarget RadarTarget, int ItemCode, int TagData, char sItemString[16], int* pColorCode, COLORREF* pRGB, double* pFontSize) -> void;
