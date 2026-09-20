@@ -24,6 +24,12 @@ private:
 	std::shared_ptr<RDFCommon::draw_settings> currentDrawSettings;
 	std::string currentDrawStyle;
 
+	// drawing center picked with .RDF VIS, shared by all screens
+	std::shared_mutex mtxVisCenter;
+	bool visPickMode = false; // true while waiting for the user to click a point on a radar screen
+	std::optional<EuroScopePlugIn::CPosition> visCenter; // overrides the controller position as drawing center
+	std::chrono::steady_clock::time_point visShowUntil; // .RDF SHOWVIS marks the center until then
+
 	// drawing records and transmitting frequency records
 	std::shared_mutex mtxTransmission;
 	RDFCommon::callsign_position curTransmission;
@@ -86,6 +92,15 @@ private:
 	auto UpdateChannel(const std::optional<std::string>& callsign, const std::optional<RDFCommon::chnl_state>& channelState) -> void;
 	auto ToggleChannel(EuroScopePlugIn::CGrountToAirChannel Channel, const std::optional<bool>& rx, const std::optional<bool>& tx) -> void;
 
+	// drawing center (.RDF VIS)
+	auto GetVisPickMode(void) -> bool;
+	auto SetVisPickMode(const bool& enabled) -> void;
+	auto GetVisCenter(void) -> std::optional<EuroScopePlugIn::CPosition>;
+	auto SetVisCenter(const std::optional<EuroScopePlugIn::CPosition>& position) -> void;
+	auto ShowVisCenter(void) -> void;
+	auto IsVisCenterShown(void) -> bool;
+	auto RefreshScreens(void) -> void;
+
 	// messages
 	inline auto DisplayMessageDebug(const std::string& msg) -> void {
 #ifdef _DEBUG
@@ -106,6 +121,7 @@ public:
 	auto HiddenWndProcessRDFMessage(const std::string& message) -> void;
 	auto HiddenWndProcessAFVMessage(const std::string& message) -> void;
 	auto HiddenWndProcessTrackAudioEvents(void) -> void;
+	auto HiddenWndProcessVisCenterTimeout(void) -> void;
 	virtual auto OnRadarScreenCreated(const char* sDisplayName, bool NeedRadarContent, bool GeoReferenced, bool CanBeSaved, bool CanBeCreated) -> EuroScopePlugIn::CRadarScreen*;
 	virtual auto OnCompileCommand(const char* sCommandLine) -> bool;
 	virtual auto OnGetTagItem(EuroScopePlugIn::CFlightPlan FlightPlan, EuroScopePlugIn::CRadarTarget RadarTarget, int ItemCode, int TagData, char sItemString[16], int* pColorCode, COLORREF* pRGB, double* pFontSize) -> void;

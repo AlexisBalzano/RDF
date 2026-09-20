@@ -37,6 +37,10 @@ constexpr auto SETTING_LINE_ONLY = "LineOnly";
 // Tag item type
 constexpr auto TAG_ITEM_TYPE_RDF_STATE = 1001; // RDF state
 
+// Screen object type
+constexpr auto SCREEN_OBJECT_TYPE_VIS_CENTER = 2001; // radar area overlay, catches the click of .RDF VIS
+constexpr auto VIS_CENTER_DISPLAY_SEC = 5; // how long .RDF SHOWVIS keeps the drawing center marked
+
 // Constants
 constexpr auto UNKNOWN_ERROR_MSG = "Unknown error!";
 constexpr auto FREQUENCY_REDUNDANT = 199999; // kHz

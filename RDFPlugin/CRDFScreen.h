@@ -15,6 +15,8 @@ private:
 	int m_ID;
 
 	auto PlaneIsVisible(const POINT& p, const RECT& radarArea) -> bool;
+	auto GetDrawCenter(void) -> POINT;
+	auto DrawVisCenterIcon(HDC hDC, const POINT& center, const COLORREF& color) -> void;
 	auto SaveDrawSetting(const std::string& varName, const std::string& varDescr, const std::string& val, const bool& useAsr) -> void;
 
 public:
@@ -27,6 +29,7 @@ public:
 	virtual auto OnAsrContentToBeClosed(void) -> void;
 	virtual auto OnRefresh(HDC hDC, int Phase) -> void;
 	virtual auto OnCompileCommand(const char* sCommandLine) -> bool;
+	virtual auto OnClickScreenObject(int ObjectType, const char* sObjectId, POINT Pt, RECT Area, int Button) -> void;
 
 };
 

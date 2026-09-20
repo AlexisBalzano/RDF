@@ -3,6 +3,69 @@
 #include "stdafx.h"
 #include "CRDFPlugin.h"
 
+// There is no plugin API for the mouse cursor, so .RDF VIS subclasses the EuroScope window
+// to show a crosshair for as long as it is waiting for a click. Everything here runs on
+// EuroScope's thread, either from a command/click handler or from the message loop itself.
+namespace {
+	HWND visPickWindow = NULL;
+	WNDPROC visPickPrevProc = NULL;
+	HCURSOR visPickCursor = NULL;
+	std::atomic_bool visPickCursorActive = false;
+
+	LRESULT CALLBACK VisPickWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+	{
+		if (msg == WM_SETCURSOR && visPickCursorActive && visPickCursor != NULL) {
+			SetCursor(visPickCursor);
+			return TRUE;
+		}
+		if (visPickPrevProc != NULL) {
+			return CallWindowProc(visPickPrevProc, hwnd, msg, wParam, lParam);
+		}
+		return DefWindowProc(hwnd, msg, wParam, lParam);
+	}
+
+	auto VisPickCursorAttach(void) -> bool
+	{
+		if (visPickCursor == NULL) {
+			visPickCursor = LoadCursor(NULL, IDC_CROSS); // shared system cursor, must not be destroyed
+			if (visPickCursor == NULL) {
+				return false;
+			}
+		}
+		if (visPickWindow == NULL) { // not subclassed yet, or left in the chain by a previous detach
+			HWND hwnd = GetActiveWindow(); // EuroScope main window, commands are handled on its thread
+			if (hwnd == NULL) {
+				return false;
+			}
+			auto prevProc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(VisPickWndProc)));
+			if (prevProc == NULL) {
+				return false;
+			}
+			visPickWindow = hwnd;
+			visPickPrevProc = prevProc;
+		}
+		visPickCursorActive = true;
+		return true;
+	}
+
+	auto VisPickCursorDetach(void) -> void
+	{
+		visPickCursorActive = false; // VisPickWndProc only forwards messages from here on
+		if (visPickWindow == NULL) {
+			return;
+		}
+		if (reinterpret_cast<WNDPROC>(GetWindowLongPtr(visPickWindow, GWLP_WNDPROC)) == VisPickWndProc) {
+			SetWindowLongPtr(visPickWindow, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(visPickPrevProc));
+			visPickWindow = NULL;
+			visPickPrevProc = NULL;
+		}
+		else {
+			// something else subclassed on top, unhooking now would drop its window procedure
+			PLOGW << "unable to restore the EuroScope window procedure";
+		}
+	}
+}
+
 CRDFPlugin::CRDFPlugin()
 	: EuroScopePlugIn::CPlugIn(EuroScopePlugIn::COMPATIBILITY_CODE,
 		MY_PLUGIN_NAME,
@@ -100,6 +163,9 @@ CRDFPlugin::CRDFPlugin()
 
 CRDFPlugin::~CRDFPlugin()
 {
+	PLOGD << "restoring the EuroScope window procedure";
+	VisPickCursorDetach(); // the subclass points into this DLL, it cannot outlive it
+
 	PLOGD << "destroying all screen instances";
 	vecScreen.clear();
 
@@ -786,6 +852,81 @@ auto CRDFPlugin::GetDrawStations(void) -> RDFCommon::callsign_position
 	return curTransmission.empty() && GetAsyncKeyState(PrevTransButton) ? preTransmission : curTransmission;
 }
 
+auto CRDFPlugin::GetVisPickMode(void) -> bool
+{
+	std::shared_lock vlock(mtxVisCenter);
+	return visPickMode;
+}
+
+auto CRDFPlugin::SetVisPickMode(const bool& enabled) -> void
+{
+	std::unique_lock vlock(mtxVisCenter);
+	if (visPickMode == enabled) {
+		return;
+	}
+	visPickMode = enabled;
+	vlock.unlock();
+	if (enabled) {
+		if (!VisPickCursorAttach()) {
+			PLOGW << "unable to show the crosshair cursor";
+		}
+	}
+	else {
+		VisPickCursorDetach();
+	}
+	PLOGD << "vis pick mode: " << enabled;
+	RefreshScreens(); // the radar area screen object is registered on refresh
+}
+
+auto CRDFPlugin::GetVisCenter(void) -> std::optional<EuroScopePlugIn::CPosition>
+{
+	std::shared_lock vlock(mtxVisCenter);
+	return visCenter;
+}
+
+auto CRDFPlugin::SetVisCenter(const std::optional<EuroScopePlugIn::CPosition>& position) -> void
+{
+	std::unique_lock vlock(mtxVisCenter);
+	visCenter = position;
+	vlock.unlock();
+	RefreshScreens();
+}
+
+auto CRDFPlugin::ShowVisCenter(void) -> void
+{
+	std::unique_lock vlock(mtxVisCenter);
+	visShowUntil = std::chrono::steady_clock::now() + std::chrono::seconds(VIS_CENTER_DISPLAY_SEC);
+	vlock.unlock();
+	// the marker is only drawn on refresh: ask for one now, and for one right after it expires.
+	// the small margin keeps the timer behind the deadline, without it the marker would only
+	// disappear when EuroScope repaints the screen on its own.
+	if (SetTimer(hiddenWindowRDF, TIMER_RDF_VIS_CENTER, VIS_CENTER_DISPLAY_SEC * 1000 + 100, NULL) == 0) {
+		PLOGW << "unable to set the vis center timer, the marker stays until the next refresh";
+	}
+	RefreshScreens();
+}
+
+auto CRDFPlugin::HiddenWndProcessVisCenterTimeout(void) -> void
+{
+	PLOGV << "vis center display is over";
+	RefreshScreens(); // IsVisCenterShown is false by now, so the marker is not drawn again
+}
+
+auto CRDFPlugin::IsVisCenterShown(void) -> bool
+{
+	std::shared_lock vlock(mtxVisCenter);
+	return std::chrono::steady_clock::now() < visShowUntil;
+}
+
+auto CRDFPlugin::RefreshScreens(void) -> void
+{
+	for (auto& screen : vecScreen) {
+		if (screen != nullptr && screen->m_Opened) {
+			screen->RequestRefresh();
+		}
+	}
+}
+
 auto CRDFPlugin::TrackAudioMessageHandler(const ix::WebSocketMessagePtr& msg) -> void
 {
 	// runs on the IXWebSocket thread: nothing here may call the EuroScope API
@@ -922,6 +1063,8 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 		static const std::string COMMAND_RELOAD = ".RDF RELOAD";
 		static const std::string COMMAND_REFRESH = ".RDF REFRESH";
 		static const std::string COMMAND_STYLE = ".RDF STYLE ";
+		static const std::string COMMAND_VIS = ".RDF VIS";
+		static const std::string COMMAND_SHOWVIS = ".RDF SHOWVIS";
 
 		// bridge on/off
 		if (cmd.starts_with(COMMAND_BRIDGE)) {
@@ -972,6 +1115,48 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 			bool useStyle = true;
 			RDFCommon::GetSettingOnOff(useStyle, styleNameUpper); // determine whether to cancel style
 			return LoadDrawingStyle(useStyle ? styleName : "");
+		}
+		// visibility
+		if (cmd.starts_with(COMMAND_VIS)) {
+			std::string visParam = cmd.substr(COMMAND_VIS.size());
+			if (!visParam.empty() && !visParam.starts_with(" ")) {
+				return false; // another command starting with VIS
+			}
+			if (auto paramBegin = visParam.find_first_not_of(' '); paramBegin != std::string::npos) {
+				visParam = visParam.substr(paramBegin, visParam.find_last_not_of(' ') - paramBegin + 1);
+			}
+			else {
+				visParam.clear();
+			}
+			bool visOn = true;
+			if (!visParam.empty() && !RDFCommon::GetSettingOnOff(visOn, visParam)) {
+				return false;
+			}
+			if (!visOn) { // forget the picked center, back to the controller position
+				SetVisPickMode(false);
+				SetVisCenter(std::nullopt);
+				std::string logMsg = "Drawing center is reset to default.";
+				PLOGI << logMsg;
+				DisplayMessageSilent(logMsg);
+				return true;
+			}
+			// the next click on any radar screen becomes the drawing center, see CRDFScreen::OnClickScreenObject
+			SetVisPickMode(true);
+			std::string logMsg = "Click a point on the radar screen to set the drawing center, right click to cancel.";
+			PLOGI << logMsg;
+			DisplayMessageSilent(logMsg);
+			return true;
+		}
+		// show the drawing center
+		if (cmd == COMMAND_SHOWVIS) {
+			ShowVisCenter();
+			auto pickedCenter = GetVisCenter();
+			std::string logMsg = pickedCenter.has_value() ?
+				std::format("Drawing center {:.5f}, {:.5f} is shown for {} seconds.", pickedCenter->m_Latitude, pickedCenter->m_Longitude, VIS_CENTER_DISPLAY_SEC) :
+				std::format("No center was picked with .RDF VIS, the default drawing center is shown for {} seconds.", VIS_CENTER_DISPLAY_SEC);
+			PLOGI << logMsg;
+			DisplayMessageSilent(logMsg);
+			return true;
 		}
 	}
 	catch (std::exception const& e)

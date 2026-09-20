@@ -26,6 +26,15 @@ LRESULT CALLBACK HiddenWindowRDF(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 		}
 		return 0;
 	}
+	case WM_TIMER: {
+		if (wParam == TIMER_RDF_VIS_CENTER) {
+			KillTimer(hwnd, TIMER_RDF_VIS_CENTER); // one shot
+			if (rdfPlugin != nullptr) {
+				rdfPlugin->HiddenWndProcessVisCenterTimeout();
+			}
+		}
+		return 0;
+	}
 	}
 
 	return DefWindowProc(hwnd, msg, wParam, lParam);

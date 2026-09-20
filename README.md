@@ -56,6 +56,13 @@ This table shows general configurable items that would affect the plugin globall
 + `.RDF RELOAD`
   + Clear transmission records.
   + Reset *TrackAudio* connection.
++ `.RDF VIS`
+  + The cursor turns into a crosshair, the next click on a radar screen becomes the center all RDF lines are drawn from.
+  + Right click cancels the selection.
++ `.RDF VIS OFF/0`
+  + Forget the picked center. Lines are drawn from the controller visibility center again, or from the center of the screen when not connected.
++ `.RDF SHOWVIS`
+  + Mark the current drawing center on every radar screen for 5 seconds, whether it was picked with `.RDF VIS` or not.
 
 > [!TIP]
 > To change the endpoint or mode for *TrackAudio* without exitting EuroScope, you may modify plugin settings file, reload settings file inside EuroScope, then run `.RDF RELOAD`.

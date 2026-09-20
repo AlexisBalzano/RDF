@@ -39,25 +39,31 @@ auto CRDFScreen::OnRefresh(HDC hDC, int Phase) -> void
 		}
 		if (Phase != EuroScopePlugIn::REFRESH_PHASE_AFTER_TAGS) return;
 
+		if (m_Plugin.lock()->GetVisPickMode()) {
+			// cover the radar area so that the next click is reported to OnClickScreenObject,
+			// screen objects only live until the next refresh so this has to be done every time
+			AddScreenObject(SCREEN_OBJECT_TYPE_VIS_CENTER, "VISCENTER", GetRadarArea(), false, "");
+		}
+
+		std::shared_lock dlock(m_Plugin.lock()->mtxDrawSettings); // prevent accidental modification
+		const RDFCommon::draw_settings params = *m_Plugin.lock()->currentDrawSettings;
+		dlock.unlock();
+
+		POINT center = GetDrawCenter();
+		if (m_Plugin.lock()->IsVisCenterShown()) { // .RDF SHOWVIS, drawn with or without transmission
+			DrawVisCenterIcon(hDC, center, params.rdfRGB);
+		}
+
 		RDFCommon::callsign_position drawPosition = m_Plugin.lock()->GetDrawStations();
 		if (drawPosition.empty()) {
 			return;
 		}
 
 		PLOGV << "drawing RDF";
-		std::shared_lock dlock(m_Plugin.lock()->mtxDrawSettings); // prevent accidental modification
-		const RDFCommon::draw_settings params = *m_Plugin.lock()->currentDrawSettings;
-		dlock.unlock();
-
 		HGDIOBJ oldBrush = SelectObject(hDC, GetStockObject(HOLLOW_BRUSH));
 		COLORREF penColor = drawPosition.size() > 1 ? params.rdfConcurRGB : params.rdfRGB;
 		HPEN hPen = CreatePen(PS_SOLID, 1, penColor);
 		HGDIOBJ oldPen = SelectObject(hDC, hPen);
-
-		POINT center = { (GetRadarArea().right - GetRadarArea().left) / 2, (GetRadarArea().bottom - GetRadarArea().top) / 2 };
-		if (auto myself = GetPlugIn()->ControllerMyself(); myself.IsValid()) {
-			center = ConvertCoordFromPositionToPixel(myself.GetPosition()); // Use vis position as Geographic center
-		}
 
 		for (auto& callsignPos : drawPosition) {
 			POINT pPos = ConvertCoordFromPositionToPixel(callsignPos.second.position);
@@ -245,9 +251,79 @@ auto CRDFScreen::OnCompileCommand(const char* sCommandLine) -> bool
 	return false;
 }
 
+auto CRDFScreen::OnClickScreenObject(int ObjectType, const char* sObjectId, POINT Pt, RECT Area, int Button) -> void
+{
+	try
+	{
+		if (ObjectType != SCREEN_OBJECT_TYPE_VIS_CENTER) return;
+		auto plugin = m_Plugin.lock();
+		if (plugin == nullptr || !plugin->GetVisPickMode()) return; // object left over from a refresh before the mode was cancelled
+		if (Button == EuroScopePlugIn::BUTTON_RIGHT) { // cancel, keep the current center
+			PLOGI << "drawing center selection cancelled (ID: " << m_ID << ")";
+			plugin->SetVisPickMode(false);
+			plugin->DisplayMessageSilent("Drawing center selection cancelled.");
+			return;
+		}
+		EuroScopePlugIn::CPosition position = ConvertCoordFromPixelToPosition(Pt);
+		plugin->SetVisPickMode(false);
+		plugin->SetVisCenter(position);
+		auto logMsg = std::format("Drawing center is set to {:.5f}, {:.5f}.", position.m_Latitude, position.m_Longitude);
+		PLOGI << logMsg << " (ID: " << m_ID << ")";
+		plugin->DisplayMessageSilent(logMsg);
+	}
+	catch (std::exception const& e)
+	{
+		PLOGE << "Error: " << e.what();
+		m_Plugin.lock()->DisplayMessageUnread(std::string("Error: ") + e.what());
+	}
+	catch (...) {
+		PLOGE << UNKNOWN_ERROR_MSG;
+		m_Plugin.lock()->DisplayMessageUnread(UNKNOWN_ERROR_MSG);
+	}
+}
+
 auto CRDFScreen::PlaneIsVisible(const POINT& p, const RECT& radarArea) -> bool
 {
 	return p.x >= radarArea.left && p.x <= radarArea.right && p.y >= radarArea.top && p.y <= radarArea.bottom;
+}
+
+auto CRDFScreen::GetDrawCenter(void) -> POINT
+{
+	if (auto pickedCenter = m_Plugin.lock()->GetVisCenter(); pickedCenter.has_value()) {
+		return ConvertCoordFromPositionToPixel(*pickedCenter); // Use the point picked with .RDF VIS
+	}
+	if (auto myself = GetPlugIn()->ControllerMyself(); myself.IsValid()) {
+		return ConvertCoordFromPositionToPixel(myself.GetPosition()); // Use vis position as Geographic center
+	}
+	return { (GetRadarArea().right - GetRadarArea().left) / 2, (GetRadarArea().bottom - GetRadarArea().top) / 2 }; // center of the screen
+}
+
+// A circled crosshair marking where the lines are drawn from, see .RDF SHOWVIS
+auto CRDFScreen::DrawVisCenterIcon(HDC hDC, const POINT& center, const COLORREF& color) -> void
+{
+	constexpr int iconRadius = 8; // circle around the center
+	constexpr int iconGap = 4; // inner end of the arms
+	constexpr int iconArm = 15; // outer end of the arms
+
+	HGDIOBJ oldBrush = SelectObject(hDC, GetStockObject(HOLLOW_BRUSH));
+	HPEN hPen = CreatePen(PS_SOLID, 2, color);
+	HGDIOBJ oldPen = SelectObject(hDC, hPen);
+
+	POINT oldPoint;
+	Ellipse(hDC, center.x - iconRadius, center.y - iconRadius, center.x + iconRadius, center.y + iconRadius);
+	MoveToEx(hDC, center.x - iconArm, center.y, &oldPoint);
+	LineTo(hDC, center.x - iconGap, center.y);
+	MoveToEx(hDC, center.x + iconGap, center.y, NULL);
+	LineTo(hDC, center.x + iconArm, center.y);
+	MoveToEx(hDC, center.x, center.y - iconArm, NULL);
+	LineTo(hDC, center.x, center.y - iconGap);
+	MoveToEx(hDC, center.x, center.y + iconGap, NULL);
+	LineTo(hDC, center.x, center.y + iconArm);
+	MoveToEx(hDC, oldPoint.x, oldPoint.y, NULL);
+
+	SelectObject(hDC, oldBrush);
+	SelectObject(hDC, oldPen);
+	DeleteObject(hPen);
 }
 
 auto CRDFScreen::SaveDrawSetting(const std::string& varName, const std::string& varDescr, const std::string& val, const bool& useAsr) -> void
