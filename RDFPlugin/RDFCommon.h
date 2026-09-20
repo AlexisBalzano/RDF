@@ -19,6 +19,7 @@ constexpr auto TRACKAUDIO_HEARTBEAT_SEC = 30;
 constexpr auto SETTING_LOG_LEVEL = "LogLevel"; // see plog::Severity
 constexpr auto SETTING_ENABLE_BRIDGE = "Bridge";
 constexpr auto SETTING_ENDPOINT = "Endpoint";
+constexpr auto SETTING_PREV_TRANS_KEY = "PrevTransKey";
 // Shared settings (ASR specific)
 constexpr auto SETTING_ENABLE_DRAW = "EnableDraw";
 constexpr auto SETTING_RGB = "RGB";
@@ -59,6 +60,8 @@ namespace RDFCommon {
 	// General functions
 	auto GetRGB(COLORREF& color, const std::string& settingValue) -> bool; // return true if success
 	auto GetSettingOnOff(bool& on, const std::string& settingValue) -> bool; // return true if success
+	auto GetKeyCode(int& keyCode, const std::string& settingValue) -> bool; // return true if success
+	auto GetKeyName(const int& keyCode) -> std::string; // the name GetKeyCode reads back
 	auto AddOffset(EuroScopePlugIn::CPosition& position, const double& heading, const double& distance) -> void;
 	auto ExtrapolateToEdgeOfScreen(const RECT& radarArea, const POINT& center, POINT& screenPos) -> void;
 

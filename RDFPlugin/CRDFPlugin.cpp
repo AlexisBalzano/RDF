@@ -48,6 +48,24 @@ namespace {
 		return true;
 	}
 
+	// Returns what follows prefix in an uppercase command line, trimmed, or nothing when the
+	// command does not match. ".RDF VIS" does not answer for ".RDF VISIBILITY".
+	auto CommandParameter(const std::string& cmd, const std::string& prefix) -> std::optional<std::string>
+	{
+		if (!cmd.starts_with(prefix)) {
+			return std::nullopt;
+		}
+		std::string param = cmd.substr(prefix.size());
+		if (!param.empty() && !param.starts_with(" ")) {
+			return std::nullopt;
+		}
+		auto paramBegin = param.find_first_not_of(' ');
+		if (paramBegin == std::string::npos) {
+			return std::string();
+		}
+		return param.substr(paramBegin, param.find_last_not_of(' ') - paramBegin + 1);
+	}
+
 	auto VisPickCursorDetach(void) -> void
 	{
 		visPickCursorActive = false; // VisPickWndProc only forwards messages from here on
@@ -152,6 +170,7 @@ CRDFPlugin::CRDFPlugin()
 	socketTrackAudio.setPingInterval(TRACKAUDIO_HEARTBEAT_SEC);
 	socketTrackAudio.setOnMessageCallback(std::bind_front(&CRDFPlugin::TrackAudioMessageHandler, this));
 	LoadTrackAudioSettings();
+	LoadPrevTransSettings();
 
 	// initialize default drawing settings
 	LoadDrawingSettings(std::nullopt);
@@ -296,6 +315,40 @@ auto CRDFPlugin::LoadTrackAudioSettings(void) -> void
 	UpdateChannel(std::nullopt, std::nullopt);
 	socketTrackAudio.start();
 	PLOGD << "TrackAudio WebSocket started";
+}
+
+auto CRDFPlugin::LoadPrevTransSettings(void) -> void
+{
+	PLOGD << "loading previous transmission key";
+	try {
+		const char* cstrKey = GetDataFromSettings(SETTING_PREV_TRANS_KEY);
+		if (cstrKey == nullptr) {
+			PLOGI << SETTING_PREV_TRANS_KEY << ": " << RDFCommon::GetKeyName(prevTransButton) << " (default)";
+			return;
+		}
+		std::string keyName = cstrKey;
+		std::transform(keyName.begin(), keyName.end(), keyName.begin(), ::toupper);
+		int keyCode;
+		if (RDFCommon::GetKeyCode(keyCode, keyName)) {
+			prevTransButton = keyCode;
+			PLOGI << SETTING_PREV_TRANS_KEY << ": " << RDFCommon::GetKeyName(keyCode);
+		}
+		else {
+			auto logMsg = std::format("Unknown {} in settings: {}. Keeping {}.", SETTING_PREV_TRANS_KEY, cstrKey, RDFCommon::GetKeyName(prevTransButton));
+			PLOGW << logMsg;
+			DisplayMessageUnread(logMsg);
+		}
+	}
+	catch (std::exception const& e)
+	{
+		PLOGE << "Error: " << e.what();
+		DisplayMessageUnread(std::string("Error: ") + e.what());
+	}
+	catch (...)
+	{
+		PLOGE << UNKNOWN_ERROR_MSG;
+		DisplayMessageUnread(UNKNOWN_ERROR_MSG);
+	}
 }
 
 auto CRDFPlugin::LoadDrawingSettings(const std::optional<std::shared_ptr<CRDFScreen>>& screenPtr) -> void
@@ -849,7 +902,7 @@ auto CRDFPlugin::ToggleChannel(EuroScopePlugIn::CGrountToAirChannel Channel, con
 auto CRDFPlugin::GetDrawStations(void) -> RDFCommon::callsign_position
 {
 	std::shared_lock tlock(mtxTransmission);
-	return curTransmission.empty() && GetAsyncKeyState(PrevTransButton) ? preTransmission : curTransmission;
+	return curTransmission.empty() && GetAsyncKeyState(prevTransButton) ? preTransmission : curTransmission;
 }
 
 auto CRDFPlugin::GetVisPickMode(void) -> bool
@@ -1065,6 +1118,7 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 		static const std::string COMMAND_STYLE = ".RDF STYLE ";
 		static const std::string COMMAND_VIS = ".RDF VIS";
 		static const std::string COMMAND_SHOWVIS = ".RDF SHOWVIS";
+		static const std::string COMMAND_PREVTRANS = ".RDF PREVTRANS";
 
 		// bridge on/off
 		if (cmd.starts_with(COMMAND_BRIDGE)) {
@@ -1117,19 +1171,9 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 			return LoadDrawingStyle(useStyle ? styleName : "");
 		}
 		// visibility
-		if (cmd.starts_with(COMMAND_VIS)) {
-			std::string visParam = cmd.substr(COMMAND_VIS.size());
-			if (!visParam.empty() && !visParam.starts_with(" ")) {
-				return false; // another command starting with VIS
-			}
-			if (auto paramBegin = visParam.find_first_not_of(' '); paramBegin != std::string::npos) {
-				visParam = visParam.substr(paramBegin, visParam.find_last_not_of(' ') - paramBegin + 1);
-			}
-			else {
-				visParam.clear();
-			}
+		if (auto visParam = CommandParameter(cmd, COMMAND_VIS); visParam.has_value()) {
 			bool visOn = true;
-			if (!visParam.empty() && !RDFCommon::GetSettingOnOff(visOn, visParam)) {
+			if (!visParam->empty() && !RDFCommon::GetSettingOnOff(visOn, *visParam)) {
 				return false;
 			}
 			if (!visOn) { // forget the picked center, back to the controller position
@@ -1143,6 +1187,30 @@ auto CRDFPlugin::OnCompileCommand(const char* sCommandLine) -> bool
 			// the next click on any radar screen becomes the drawing center, see CRDFScreen::OnClickScreenObject
 			SetVisPickMode(true);
 			std::string logMsg = "Click a point on the radar screen to set the drawing center, right click to cancel.";
+			PLOGI << logMsg;
+			DisplayMessageSilent(logMsg);
+			return true;
+		}
+		// previous transmission key
+		if (auto keyParam = CommandParameter(cmd, COMMAND_PREVTRANS); keyParam.has_value()) {
+			if (keyParam->empty()) { // report the current one
+				std::string logMsg = std::format("Previous transmission key is {}.", RDFCommon::GetKeyName(prevTransButton));
+				PLOGI << logMsg;
+				DisplayMessageSilent(logMsg);
+				return true;
+			}
+			int keyCode;
+			if (!RDFCommon::GetKeyCode(keyCode, *keyParam)) {
+				std::string logMsg = std::format("Unknown key: {}. Accepted: a letter or a digit, F1 to F24, NUM0 to NUM9, "
+					"a name such as XBUTTON1, MOUSE4, PAGEUP or SPACE, or a virtual key code such as 0x05.", *keyParam);
+				PLOGW << logMsg;
+				DisplayMessageUnread(logMsg);
+				return true;
+			}
+			prevTransButton = keyCode;
+			auto keyName = RDFCommon::GetKeyName(keyCode);
+			SaveDataToSettings(SETTING_PREV_TRANS_KEY, "Previous transmission key", keyName.c_str());
+			std::string logMsg = std::format("Previous transmission key is set to {}.", keyName);
 			PLOGI << logMsg;
 			DisplayMessageSilent(logMsg);
 			return true;

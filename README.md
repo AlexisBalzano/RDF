@@ -37,15 +37,17 @@ Do the same work as [*afv-euroscope-bridge*](https://github.com/AndyTWF/afv-euro
 
 This table shows general configurable items that would affect the plugin globally.
 
-| Entry Name | Related Command Line | Value  |  Default Value  |
-| ---------- | -------------------- | :----: | :-------------: |
-| LogLevel   |                      |        |      None       |
-| Bridge     | `.RDF BRIDGE ON/OFF` | 0 or 1 |        1        |
-| Endpoint   | `.RDF RELOAD`        |        | 127.0.0.1:49080 |
+| Entry Name   | Related Command Line   | Value  |  Default Value  |
+| ------------ | ---------------------- | :----: | :-------------: |
+| LogLevel     |                        |        |      None       |
+| Bridge       | `.RDF BRIDGE ON/OFF`   | 0 or 1 |        1        |
+| Endpoint     | `.RDF RELOAD`          |        | 127.0.0.1:49080 |
+| PrevTransKey | `.RDF PREVTRANS [Key]` |        |    XBUTTON1     |
 
 + **LogLevel** is none by default. Accepted levels include none, error, warning, info, debug, verbose. Log levels other than none will automatically save an *RDFPlugin.log* file next to DLL file.
 + **Bridge** controls whether *TrackAudio* and *Audio for VATSIM standalone client* RX/TX stations should be synchronized to EuroScope channels' text receive/transmit.
 + **Endpoint** should include address and port only. E.g. 127.0.0.1:49080 or localhost:49080, etc.
++ **PrevTransKey** is the key or mouse button held down to draw the previous transmission. It is stored by name, see `.RDF PREVTRANS` for the accepted ones. A key edited by hand in the settings file is only picked up when the plugin is reloaded.
 
 ### General Command Line Functions
 
@@ -63,6 +65,11 @@ This table shows general configurable items that would affect the plugin globall
   + Forget the picked center. Lines are drawn from the controller visibility center again, or from the center of the screen when not connected.
 + `.RDF SHOWVIS`
   + Mark the current drawing center on every radar screen for 5 seconds, whether it was picked with `.RDF VIS` or not.
++ `.RDF PREVTRANS [Key]`
+  + Set the key held down to draw the previous transmission, and save it as **PrevTransKey**.
+  + Accepted keys: a letter or a digit, `F1` to `F24`, `NUM0` to `NUM9`, a name such as `XBUTTON1`, `MOUSE4`, `SPACE`, `PAGEUP` or `CTRL`, or a raw virtual key code such as `0x05`.
+  + `XBUTTON1`/`MOUSE4` and `XBUTTON2`/`MOUSE5` are the two side buttons. Which one a mouse calls 4 or 5 varies, so try the other if nothing happens.
+  + Without a key, the current one is displayed.
 
 > [!TIP]
 > To change the endpoint or mode for *TrackAudio* without exitting EuroScope, you may modify plugin settings file, reload settings file inside EuroScope, then run `.RDF RELOAD`.

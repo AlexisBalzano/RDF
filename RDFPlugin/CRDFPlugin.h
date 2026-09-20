@@ -13,7 +13,8 @@ class CRDFPlugin : public EuroScopePlugIn::CPlugIn, public std::enable_shared_fr
 private:
 	friend class CRDFScreen;
 
-	static constexpr int PrevTransButton = VK_XBUTTON1; //MOUSE5 button by default
+	// held down to draw the previous transmission again, see .RDF PREVTRANS
+	std::atomic<int> prevTransButton = VK_XBUTTON1; // a side mouse button by default
 
 	// directory
 	std::filesystem::path dllPath;
@@ -79,6 +80,7 @@ private:
 
 	// settings related functions
 	auto LoadTrackAudioSettings(void) -> void;
+	auto LoadPrevTransSettings(void) -> void;
 	auto LoadDrawingSettings(const std::optional<std::shared_ptr<CRDFScreen>>& screenPtr) -> void;
 	auto LoadDrawingStyle(const std::string& styleName) -> bool;
 

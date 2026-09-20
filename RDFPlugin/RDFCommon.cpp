@@ -39,6 +39,139 @@ auto RDFCommon::GetSettingOnOff(bool& on, const std::string& settingValue) -> bo
 	return false;
 }
 
+// Virtual key names accepted by .RDF PREVTRANS. The first name of a code is the one written back
+// to the settings file, the ones after it are aliases. Letters, digits, F1 to F24 and NUM0 to NUM9
+// are not listed, GetKeyCode derives those from the name itself.
+static const std::vector<std::pair<std::string, int>> keyNames = {
+	// mouse, the side buttons are labelled 4 and 5 on most mice
+	{ "XBUTTON1", VK_XBUTTON1 },
+	{ "XBUTTON2", VK_XBUTTON2 },
+	{ "LBUTTON", VK_LBUTTON },
+	{ "RBUTTON", VK_RBUTTON },
+	{ "MBUTTON", VK_MBUTTON },
+	{ "MOUSE1", VK_LBUTTON },
+	{ "MOUSE2", VK_RBUTTON },
+	{ "MOUSE3", VK_MBUTTON },
+	{ "MOUSE4", VK_XBUTTON1 },
+	{ "MOUSE5", VK_XBUTTON2 },
+	// modifiers
+	{ "SHIFT", VK_SHIFT },
+	{ "CTRL", VK_CONTROL },
+	{ "ALT", VK_MENU },
+	{ "CONTROL", VK_CONTROL },
+	{ "MENU", VK_MENU },
+	{ "LSHIFT", VK_LSHIFT },
+	{ "RSHIFT", VK_RSHIFT },
+	{ "LCTRL", VK_LCONTROL },
+	{ "RCTRL", VK_RCONTROL },
+	{ "LALT", VK_LMENU },
+	{ "RALT", VK_RMENU },
+	{ "LWIN", VK_LWIN },
+	{ "RWIN", VK_RWIN },
+	// editing and navigation
+	{ "BACKSPACE", VK_BACK },
+	{ "TAB", VK_TAB },
+	{ "ENTER", VK_RETURN },
+	{ "RETURN", VK_RETURN },
+	{ "ESC", VK_ESCAPE },
+	{ "ESCAPE", VK_ESCAPE },
+	{ "SPACE", VK_SPACE },
+	{ "PAGEUP", VK_PRIOR },
+	{ "PAGEDOWN", VK_NEXT },
+	{ "END", VK_END },
+	{ "HOME", VK_HOME },
+	{ "LEFT", VK_LEFT },
+	{ "UP", VK_UP },
+	{ "RIGHT", VK_RIGHT },
+	{ "DOWN", VK_DOWN },
+	{ "INSERT", VK_INSERT },
+	{ "DELETE", VK_DELETE },
+	{ "PRINTSCREEN", VK_SNAPSHOT },
+	{ "PAUSE", VK_PAUSE },
+	{ "CAPSLOCK", VK_CAPITAL },
+	{ "NUMLOCK", VK_NUMLOCK },
+	{ "SCROLLLOCK", VK_SCROLL },
+	// numeric keypad, NUM0 to NUM9 are derived in GetKeyCode
+	{ "NUMADD", VK_ADD },
+	{ "NUMSUB", VK_SUBTRACT },
+	{ "NUMMUL", VK_MULTIPLY },
+	{ "NUMDIV", VK_DIVIDE },
+	{ "NUMDEC", VK_DECIMAL },
+};
+
+auto RDFCommon::GetKeyCode(int& keyCode, const std::string& settingValue) -> bool
+{
+	// settingValue is uppercase and trimmed
+	try {
+		PLOGV << settingValue;
+		if (settingValue.empty()) {
+			return false;
+		}
+		if (settingValue.size() == 1) {
+			// a letter or a digit is its own virtual key code
+			char character = settingValue.front();
+			if ((character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9')) {
+				keyCode = (int)character;
+				return true;
+			}
+			return false;
+		}
+		for (const auto& [name, code] : keyNames) {
+			if (name == settingValue) {
+				keyCode = code;
+				return true;
+			}
+		}
+		std::smatch match;
+		std::regex rxFunction(R"(^F(\d{1,2})$)");
+		if (std::regex_match(settingValue, match, rxFunction)) {
+			int index = std::stoi(match[1].str());
+			if (index >= 1 && index <= 24) {
+				keyCode = VK_F1 + index - 1;
+				return true;
+			}
+			return false;
+		}
+		std::regex rxNumpad(R"(^NUM(\d)$)");
+		if (std::regex_match(settingValue, match, rxNumpad)) {
+			keyCode = VK_NUMPAD0 + std::stoi(match[1].str());
+			return true;
+		}
+		// raw virtual key code, the way out for anything without a name here
+		std::regex rxCode(R"(^0X([0-9A-F]{1,2})$)");
+		if (std::regex_match(settingValue, match, rxCode)) {
+			int code = std::stoi(match[1].str(), nullptr, 16);
+			if (code > 0) {
+				keyCode = code;
+				return true;
+			}
+		}
+	}
+	catch (...) {
+		PLOGE << "invalid key value";
+	}
+	return false;
+}
+
+auto RDFCommon::GetKeyName(const int& keyCode) -> std::string
+{
+	if (keyCode >= VK_F1 && keyCode <= VK_F24) {
+		return std::format("F{}", keyCode - VK_F1 + 1);
+	}
+	if (keyCode >= VK_NUMPAD0 && keyCode <= VK_NUMPAD9) {
+		return std::format("NUM{}", keyCode - VK_NUMPAD0);
+	}
+	if ((keyCode >= 'A' && keyCode <= 'Z') || (keyCode >= '0' && keyCode <= '9')) {
+		return std::string(1, (char)keyCode);
+	}
+	for (const auto& [name, code] : keyNames) {
+		if (code == keyCode) {
+			return name;
+		}
+	}
+	return std::format("0X{:02X}", keyCode);
+}
+
 auto RDFCommon::AddOffset(EuroScopePlugIn::CPosition& position, const double& heading, const double& distance) -> void
 {
 	// from ES internal void CEuroScopeCoord :: Move ( double heading, double distance )
